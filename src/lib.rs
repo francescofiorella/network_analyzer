@@ -1,6 +1,7 @@
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
+    use std::str::from_utf8;
     use pcap::Packet;
 
     pub struct Sniffer {}
@@ -22,6 +23,47 @@ pub mod sniffer {
         destination_port: u16, // 36 - 37
         other_data: Vec<u8>
     }
+
+    pub fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
+        let mut s = String::new();
+        (start..=end).for_each(|byte| {
+            let v = vec![p[byte]];
+            //s.push_str(v[..]);
+            s.push_str("::");
+        });
+        s
+    }
+
+
+    impl NAPacket{
+        pub fn new(pcap_packet: Packet)-> Self {
+            NAPacket{
+            destination_mac_address: to_mac_address(&pcap_packet, 0,5),
+                source_mac_address: to_mac_address(&pcap_packet,6,11),
+                level_three_type:
+                    if(pcap_packet[12]==8){
+                         4}else{6},
+
+                header_length: 0,
+                explicit_congestion_notification: 0,
+                total_length: 0,
+                identification: 0,
+                fragment_offset: 0,
+                ttl: 0,
+                level_four_protocol: 0,
+                header_checksum: 0,
+                source_address: "".to_string(),
+                destination_address: "".to_string(),
+                source_port: 0,
+                destination_port: 0,
+                other_data: vec![]
+            }}
+
+        pub fn getdestmac(&self){
+            println!(" Dest: {}, Source: {}",self.destination_mac_address, self.source_mac_address);
+        }
+    }
+
 
 
     #[derive(Debug)]
