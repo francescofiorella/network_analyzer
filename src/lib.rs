@@ -1,8 +1,9 @@
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
+    use std::io::{stdin, stdout, Write};
+    use pcap::{Device, Packet};
     use std::str::from_utf8;
-    use pcap::Packet;
 
     pub struct Sniffer {}
     pub struct NAPacket {
@@ -82,6 +83,41 @@ pub mod sniffer {
     }
 
     impl Error for NAError{}
+
+
+    pub fn list_adapters() -> Result<String, NAError> {
+        let mut dev_names = String::new();
+        let devices = match Device::list() {
+            Ok(vec) => vec,
+            Err(_) => return Err(NAError::new("Error while searching for network adapters"))
+        };
+
+        devices.into_iter().for_each(|dev| {
+          dev_names.push_str(dev.name.as_str());
+          dev_names.push('\n');
+        });
+
+        Ok(dev_names)
+    }
+
+
+    pub fn na_config(){
+        let mut adapter_name = String::new();
+        let mut report_file_name = String::new();
+
+        println!("Select the adapter to sniff: ");
+        println!("{}", list_adapters().unwrap());
+        stdout().flush().unwrap();
+        stdin().read_line(&mut adapter_name).unwrap();
+
+        println!("Define .txt report file path and name: ");
+        stdout().flush().unwrap();
+        stdin().read_line(&mut report_file_name).unwrap();
+
+
+
+
+    }
 
 
 }
