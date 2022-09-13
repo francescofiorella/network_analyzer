@@ -6,10 +6,10 @@ pub mod sniffer {
     use std::str::from_utf8;
 
     pub struct Sniffer {}
+
+    #[derive(Debug)]
     pub struct NAPacket {
-        destination_mac_address: String, // 0 - 5
-        source_mac_address: String, // 6 - 11
-        level_three_type: u16, // 12 - 13
+        level_three_type: u8, // 12 - 13
         header_length: u8, // 14
         explicit_congestion_notification: u8, // 15
         total_length: u16, // 16 - 17
@@ -25,44 +25,42 @@ pub mod sniffer {
         other_data: Vec<u8>
     }
 
-    pub fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
+    pub fn to_ip_address(p: &Packet, start: usize, end: usize) -> String {
         let mut s = String::new();
         (start..=end).for_each(|byte| {
-            let v = vec![p[byte]];
-            //s.push_str(v[..]);
-            s.push_str("::");
+            s.push_str(&*String::from_utf8(vec![p[byte]]).unwrap());
+            if byte != end {
+                s.push('.');
+            }
         });
         s
+    }
+
+    pub fn to_u16(p: &Packet, start: usize) -> u16 {
+        let param1 : u16 = p[start] as u16 * 256;
+        let param2 = p[start+1] as u16;
+        param1 + param2
     }
 
 
     impl NAPacket{
         pub fn new(pcap_packet: Packet)-> Self {
             NAPacket{
-            destination_mac_address: to_mac_address(&pcap_packet, 0,5),
-                source_mac_address: to_mac_address(&pcap_packet,6,11),
-                level_three_type:
-                    if(pcap_packet[12]==8){
-                         4}else{6},
-
-                header_length: 0,
-                explicit_congestion_notification: 0,
-                total_length: 0,
-                identification: 0,
-                fragment_offset: 0,
-                ttl: 0,
-                level_four_protocol: 0,
-                header_checksum: 0,
-                source_address: "".to_string(),
-                destination_address: "".to_string(),
-                source_port: 0,
-                destination_port: 0,
+                level_three_type: if (pcap_packet[12] == 8){4} else {6},
+                header_length: pcap_packet[14],
+                explicit_congestion_notification: pcap_packet[15],
+                total_length: to_u16(&pcap_packet, 16),
+                identification: to_u16(&pcap_packet, 18),
+                fragment_offset: to_u16(&pcap_packet, 20),
+                ttl: pcap_packet[22],
+                level_four_protocol: pcap_packet[23],
+                header_checksum: to_u16(&pcap_packet, 24),
+                source_address: to_ip_address(&pcap_packet, 26, 29),
+                destination_address: to_ip_address(&pcap_packet, 30, 33),
+                source_port: to_u16(&pcap_packet, 34),
+                destination_port: to_u16(&pcap_packet, 36),
                 other_data: vec![]
             }}
-
-        pub fn getdestmac(&self){
-            println!(" Dest: {}, Source: {}",self.destination_mac_address, self.source_mac_address);
-        }
     }
 
 
@@ -93,8 +91,8 @@ pub mod sniffer {
         };
 
         devices.into_iter().for_each(|dev| {
-          dev_names.push_str(dev.name.as_str());
-          dev_names.push('\n');
+            dev_names.push_str(dev.name.as_str());
+            dev_names.push('\n');
         });
 
         Ok(dev_names)
@@ -113,9 +111,6 @@ pub mod sniffer {
         println!("Define .txt report file path and name: ");
         stdout().flush().unwrap();
         stdin().read_line(&mut report_file_name).unwrap();
-
-
-
 
     }
 
