@@ -4,6 +4,7 @@ pub mod sniffer {
     use std::io::{stdin, stdout, Write};
     use pcap::{Device, Packet};
     use std::str::from_utf8;
+    use rustc_serialize::hex::ToHex;
 
     pub struct Sniffer {}
 
@@ -25,12 +26,25 @@ pub mod sniffer {
         other_data: Vec<u8>
     }
 
-    pub fn to_ip_address(p: &Packet, start: usize, end: usize) -> String {
+    pub fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
         let mut s = String::new();
         (start..=end).for_each(|byte| {
-            s.push_str(&*String::from_utf8(vec![p[byte]]).unwrap());
-            if byte != end {
-                s.push('.');
+            let v = vec![p[byte]];
+            s.push_str(&v[..].to_hex());
+            if byte!=end{
+                s.push_str(":");
+            }
+        });
+        s
+    }
+
+    pub fn to_ip_address(p: &Packet,start: usize, end: usize)->String{
+        let mut s = String::new();
+        (start..=end).for_each(|byte| {
+            let v = vec![p[byte]];
+            s.push_str(&p[byte].to_string());
+            if byte!=end{
+                s.push_str(".");
             }
         });
         s
