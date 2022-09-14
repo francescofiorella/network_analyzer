@@ -58,6 +58,10 @@ pub mod sniffer {
         param1 + param2
     }
 
+    pub fn to_u4(hlen: u8)-> u8{
+        hlen & 15
+    }
+
     pub fn to_level_four_protocol(prot_num: u8) -> String{
             match prot_num{
                 1 => "ICMP".to_string() ,
@@ -75,7 +79,7 @@ pub mod sniffer {
                 destination_mac_address: to_mac_address(&pcap_packet, 0,5),
                 source_mac_address: to_mac_address(&pcap_packet,6,11),
                 level_three_type: if pcap_packet[12] == 8 {4} else {6},
-                header_length: pcap_packet[14],
+                header_length: to_u4(pcap_packet[14])*4,
                 explicit_congestion_notification: pcap_packet[15],
                 total_length: to_u16(&pcap_packet, 16),
                 identification: to_u16(&pcap_packet, 18),
