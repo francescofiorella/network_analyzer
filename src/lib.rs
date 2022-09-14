@@ -10,6 +10,10 @@ pub mod sniffer {
 
     #[derive(Debug)]
     pub struct NAPacket {
+        //level 2 header
+        destination_mac_address: String, // 0 - 5
+        source_mac_address: String, // 6 - 11
+        //level 3 header
         level_three_type: u8, // 12 - 13
         header_length: u8, // 14
         explicit_congestion_notification: u8, // 15
@@ -17,7 +21,7 @@ pub mod sniffer {
         identification: u16, // 18 - 19
         fragment_offset: u16, // 20 - 21
         ttl: u8, // 22
-        level_four_protocol: u8, // 23
+        level_four_protocol: String, // 23
         header_checksum: u16, // 24 - 25
         source_address: String, // 26 - 29
         destination_address: String, // 30 - 33
@@ -29,8 +33,7 @@ pub mod sniffer {
     pub fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
         let mut s = String::new();
         (start..=end).for_each(|byte| {
-            let v = vec![p[byte]];
-            s.push_str(&v[..].to_hex());
+            s.push_str(&[p[byte]].to_hex());
             if byte!=end{
                 s.push_str(":");
             }
@@ -38,12 +41,12 @@ pub mod sniffer {
         s
     }
 
-    pub fn to_ip_address(p: &Packet,start: usize, end: usize)->String{
+    //da gestire la casistica in cui level_three_type: 6
+    pub fn to_ip_address(p: &Packet,start: usize, end: usize) -> String{
         let mut s = String::new();
         (start..=end).for_each(|byte| {
-            let v = vec![p[byte]];
             s.push_str(&p[byte].to_string());
-            if byte!=end{
+            if byte != end {
                 s.push_str(".");
             }
         });
@@ -56,10 +59,22 @@ pub mod sniffer {
         param1 + param2
     }
 
+    pub fn to_level_four_protocol(prot_num: u8) -> String{
+            match prot_num{
+                1 => "ICMP".to_string() ,
+                2 => "IGMP".to_string(),
+                6 => "TCP".to_string(),
+                17 => "UDP".to_string(),
+                _ => prot_num.to_string()
+            }
+    }
+
 
     impl NAPacket{
         pub fn new(pcap_packet: Packet)-> Self {
             NAPacket{
+                destination_mac_address: to_mac_address(&pcap_packet, 0,5),
+                source_mac_address: to_mac_address(&pcap_packet,6,11),
                 level_three_type: if (pcap_packet[12] == 8){4} else {6},
                 header_length: pcap_packet[14],
                 explicit_congestion_notification: pcap_packet[15],
@@ -67,7 +82,7 @@ pub mod sniffer {
                 identification: to_u16(&pcap_packet, 18),
                 fragment_offset: to_u16(&pcap_packet, 20),
                 ttl: pcap_packet[22],
-                level_four_protocol: pcap_packet[23],
+                level_four_protocol: to_level_four_protocol(pcap_packet[23]),
                 header_checksum: to_u16(&pcap_packet, 24),
                 source_address: to_ip_address(&pcap_packet, 26, 29),
                 destination_address: to_ip_address(&pcap_packet, 30, 33),

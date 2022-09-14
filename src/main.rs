@@ -15,12 +15,11 @@ struct Args {
     timeout: i32,
     #[clap(short, long, value_parser, default_value = "None")]
     filter: String,
-
-
 }
 
 fn main() {
     let args = Args::parse();
+    println!("{}", args.adapter);
     println!("{}", args.output);
     println!("{}", args.timeout);
     println!("{}", args.filter);
