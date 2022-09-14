@@ -18,11 +18,19 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    println!("{}", args.adapter);
+    /* println!("{}", args.adapter);
     println!("{}", args.output);
     println!("{}", args.timeout);
     println!("{}", args.filter);
+    */
     let d = Device::list().unwrap();
+    for (i, device) in d.iter().enumerate() {
+        print!("Device {} | ", i);
+        for addr in &device.addresses {
+            print!("{:?} | ", addr.addr);
+        }
+        println!()
+    }
     let device = d.into_iter().find(|d| d.name == args.adapter).unwrap();
     // controllare se il device esiste
 
@@ -37,12 +45,18 @@ fn main() {
     //println!("IPv4: {:?}, IPv6: {:?}", device.addresses[0].addr, device.addresses[1].addr);
     let mut vec = Vec::new();
 
-    for _ in 0..=300 {
+    //let mut sf = cap.savefile("./result.pcap").unwrap();
+
+    for _ in 0..=3000 {
         let res = cap.next_packet();
         match res {
             Ok(packet) => {
                 let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-                let p = NAPacket::new(packet, timestamp);
+                let p = NAPacket::new(packet.clone(), timestamp);
+
+                /*if p.level_three_type == 6 {
+                    sf.write(&packet);
+                }*/
                 vec.push(p);
                 //println!("Source: {:?}, Destination: {:?}", p.source_address, p.destination_address)
             },

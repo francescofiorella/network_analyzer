@@ -14,7 +14,7 @@ pub mod sniffer {
         destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
         //level 3 header
-        level_three_type: u8, // 12 - 13
+        pub level_three_type: u8, // 12 - 13
         header_length: u8, // 14
         explicit_congestion_notification: u8, // 15
         total_length: u16, // 16 - 17
@@ -276,8 +276,9 @@ pub mod sniffer {
                     update_stats(&mut incoming_ipv6_stats, &packet, packet.destination_port, device_ipv6_address.clone());
                 }
                 _ => {
-                    println!("{:?}", packet);
-                    panic!("Should not be possible!")
+                    println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
+                    // panic!("Should not be possible!");
+                    continue
                 }
             }
         }
