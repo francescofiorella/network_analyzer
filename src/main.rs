@@ -8,7 +8,7 @@ fn main() {
         12,
         6,
         "192.168.137.2".to_string(),
-        "192.168.137.1".to_string(),
+        "192.168.178.25".to_string(),
         25,
         80,
     );
@@ -16,7 +16,7 @@ fn main() {
         13,
         4,
         "192.168.137.3".to_string(),
-        "192.168.137.1".to_string(),
+        "192.168.178.25".to_string(),
         26,
         80,
     );
@@ -25,7 +25,7 @@ fn main() {
     let packet3 = Packet::new(
         16,
         6,
-        "fe80::535:e0cb:61bb:d1cc".to_string(),
+        "fe80::4c34:b7af:2bc3:1867".to_string(),
         "fe80::535:e0cb:61bb:d1ce".to_string(),
         15,
         90,
@@ -33,7 +33,7 @@ fn main() {
     let packet4 = Packet::new(
         12,
         5,
-        "fe80::535:e0cb:61bb:d1cc".to_string(),
+        "fe80::4c34:b7af:2bc3:1867".to_string(),
         "fe80::535:e0cb:61bb:d1cf".to_string(),
         16,
         90,
