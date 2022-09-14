@@ -1,6 +1,7 @@
+use std::time::SystemTime;
 use clap::Parser;
 use pcap::{Capture, Device};
-use network_analyzer::sniffer::{NAPacket};
+use network_analyzer::sniffer::{NAPacket, produce_report, produce_stats};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -26,18 +27,37 @@ fn main() {
     // controllare se il device esiste
 
     //d.iter().for_each(|dev| println!("{}", dev.name));
-    let mut cap = Capture::from_device(device)
+    let mut cap = Capture::from_device(device.clone())
         .unwrap()
         .promisc(true)
         .timeout(args.timeout)
         .open()
         .unwrap();
 
+    //println!("IPv4: {:?}, IPv6: {:?}", device.addresses[0].addr, device.addresses[1].addr);
+    let mut vec = Vec::new();
+
+    for _ in 0..=300 {
+        let res = cap.next_packet();
+        match res {
+            Ok(packet) => {
+                let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+                let p = NAPacket::new(packet, timestamp);
+                vec.push(p);
+                //println!("Source: {:?}, Destination: {:?}", p.source_address, p.destination_address)
+            },
+            _=> break
+        }
+    }
+
+    let stats = produce_stats(device, vec);
+    produce_report(stats);
+    /*
     while let Ok(packet) = cap.next_packet() {
         let n = NAPacket::new(packet);
         println!("{:?}", n);
     }
-
+*/
     /*
     // incoming IPv4
     let packet1 = Packet::new(

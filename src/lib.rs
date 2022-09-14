@@ -27,7 +27,8 @@ pub mod sniffer {
         destination_address: String, // 30 - 33
         source_port: u16, // 34 - 35
         destination_port: u16, // 36 - 37
-        other_data: Vec<u8>
+        other_data: Vec<u8>,
+        timestamp: u128
     }
 
     pub fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
@@ -75,7 +76,7 @@ pub mod sniffer {
 
 
     impl NAPacket{
-        pub fn new(pcap_packet: Packet)-> Self {
+        pub fn new(pcap_packet: Packet, timestamp: u128)-> Self {
             NAPacket{
                 destination_mac_address: to_mac_address(&pcap_packet, 0,5),
                 source_mac_address: to_mac_address(&pcap_packet,6,11),
@@ -92,7 +93,8 @@ pub mod sniffer {
                 destination_address: to_ip_address(&pcap_packet, 30, 33),
                 source_port: to_u16(&pcap_packet, 34),
                 destination_port: to_u16(&pcap_packet, 36),
-                other_data: vec![]
+                other_data: vec![],
+                timestamp
             }}
     }
 
@@ -152,8 +154,8 @@ pub mod sniffer {
     pub struct Stats {
         ip_address: String,
         port: u16,
-        transported_protocols: Vec<u8>,
-        bytes_number: u16,
+        transported_protocols: Vec<String>,
+        bytes_number: u128,
         first_timestamp: u128,
         last_timestamp: u128,
     }
@@ -171,7 +173,7 @@ pub mod sniffer {
         }
     }
 
-    pub fn produce_stats(device: Device, packets: Vec<&NAPacket>) -> [Vec<Stats>; 4] {
+    pub fn produce_stats(device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
         fn update_stats(vec: &mut Vec<Stats>, packet: &NAPacket, packet_port: u16, device_address: String) {
             let mut iter = vec.iter_mut();
             loop {
@@ -182,13 +184,13 @@ pub mod sniffer {
                         // aggiorna la porta
                         stats.port = packet_port;
                         // aggiungi il protocollo di livello 4
-                        stats.transported_protocols.push(packet.level_four_protocol);
+                        stats.transported_protocols.push(packet.level_four_protocol.clone());
                         // aggiorna il numero totale di bytes
-                        stats.bytes_number = packet.total_length;
+                        stats.bytes_number = packet.total_length as u128;
                         // aggiorna il first timestamp
-                        // stats.first_timestamp = something;
+                        stats.first_timestamp = packet.timestamp;
                         // aggiorna il last timestamp
-                        // stats.last_timestamp = something;
+                        stats.last_timestamp = packet.timestamp;
                         break;
                     }
                     // se il vettore è già stato usato
@@ -198,12 +200,12 @@ pub mod sniffer {
                             // queste sono le statistiche, aggiorna!
                             // aggiungi il protocollo di livello 4, se non c'è
                             if !stats.transported_protocols.contains(&packet.level_four_protocol) {
-                                stats.transported_protocols.push(packet.level_four_protocol);
+                                stats.transported_protocols.push(packet.level_four_protocol.clone());
                             }
                             // aggiorna il numero totale di bytes
-                            stats.bytes_number += packet.total_length;
+                            stats.bytes_number += (packet.total_length as u128);
                             // aggiorna il last timestamp
-                            // stats.last_timestamp = something;
+                            stats.last_timestamp = packet.timestamp;
                             break;
                         } else {
                             // statistiche non ancora trovate, continua a cercare!
@@ -217,13 +219,13 @@ pub mod sniffer {
                         // aggiorna la porta
                         stats.port = packet_port;
                         // aggiungi il protocollo di livello 4
-                        stats.transported_protocols.push(packet.level_four_protocol);
+                        stats.transported_protocols.push(packet.level_four_protocol.clone());
                         // aggiorna il numero totale di bytes
-                        stats.bytes_number = packet.total_length;
+                        stats.bytes_number = packet.total_length as u128;
                         // aggiorna il first timestamp
-                        // stats.first_timestamp = something;
+                        stats.first_timestamp = packet.timestamp;
                         // aggiorna il last timestamp
-                        // stats.last_timestamp = something;
+                        stats.last_timestamp = packet.timestamp;
                         // aggiungi stats a vettore
                         vec.push(stats);
                         break;
@@ -258,22 +260,25 @@ pub mod sniffer {
                 // outgoing packet
                 (it, _) if *it == device_ipv4_address => {
                     // se è un outgoing ipv4 packet
-                    update_stats(&mut outgoing_ipv4_stats, packet, packet.source_port, device_ipv4_address.clone());
+                    update_stats(&mut outgoing_ipv4_stats, &packet, packet.source_port, device_ipv4_address.clone());
                 }
                 (it, _) if *it == device_ipv6_address => {
                     // se è un outgoing ipv6 packet
-                    update_stats(&mut outgoing_ipv6_stats, packet, packet.source_port, device_ipv6_address.clone());
+                    update_stats(&mut outgoing_ipv6_stats, &packet, packet.source_port, device_ipv6_address.clone());
                 }
                 // incoming packet
                 (_, it) if *it == device_ipv4_address => {
                     // se è un incoming ipv4 packet
-                    update_stats(&mut incoming_ipv4_stats, packet, packet.destination_port, device_ipv4_address.clone());
+                    update_stats(&mut incoming_ipv4_stats, &packet, packet.destination_port, device_ipv4_address.clone());
                 }
                 (_, it) if *it == device_ipv6_address => {
                     // se è un incoming ipv6 packet
-                    update_stats(&mut incoming_ipv6_stats, packet, packet.destination_port, device_ipv6_address.clone());
+                    update_stats(&mut incoming_ipv6_stats, &packet, packet.destination_port, device_ipv6_address.clone());
                 }
-                _ => panic!("Should not be possible!")
+                _ => {
+                    println!("{:?}", packet);
+                    panic!("Should not be possible!")
+                }
             }
         }
         [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats]
@@ -317,7 +322,11 @@ pub mod sniffer {
                     .expect("Unable to write the report file!");
                 // write the list of transported protocols
                 writeln!(report, "Transported protocols: {}", stats.transported_protocols.iter().fold(
-                    String::new(), |acc, &num| acc + &num.to_string() + ", ")
+                    String::new(), |mut acc, prot| {
+                        acc.push_str(prot.as_str());
+                        acc.push_str(", ");
+                        acc
+                    })
                 ).expect("Unable to write the report file!");
                 // write the total number of bytes
                 writeln!(report, "Cumulated number of bytes transmitted: {}", stats.bytes_number)
