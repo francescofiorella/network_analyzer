@@ -3,7 +3,6 @@ pub mod sniffer {
     use std::fmt::{Display, Formatter};
     use std::io::{stdin, stdout, Write};
     use pcap::{Device, Packet};
-    use std::str::from_utf8;
     use rustc_serialize::hex::ToHex;
 
     pub struct Sniffer {}
@@ -75,7 +74,7 @@ pub mod sniffer {
             NAPacket{
                 destination_mac_address: to_mac_address(&pcap_packet, 0,5),
                 source_mac_address: to_mac_address(&pcap_packet,6,11),
-                level_three_type: if (pcap_packet[12] == 8){4} else {6},
+                level_three_type: if pcap_packet[12] == 8 {4} else {6},
                 header_length: pcap_packet[14],
                 explicit_congestion_notification: pcap_packet[15],
                 total_length: to_u16(&pcap_packet, 16),

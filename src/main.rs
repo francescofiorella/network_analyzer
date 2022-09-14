@@ -1,8 +1,6 @@
-use std::env::args;
-use std::io::{Read, stdin, stdout, Write};
 use clap::Parser;
 use pcap::{Capture, Device};
-use network_analyzer::sniffer::{list_adapters, na_config, NAPacket};
+use network_analyzer::sniffer::{NAPacket};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -24,8 +22,11 @@ fn main() {
     println!("{}", args.timeout);
     println!("{}", args.filter);
     let d = Device::list().unwrap();
-    d.iter().for_each(|dev| println!("{}", dev.name));
-    let mut cap = Capture::from_device(Device::from(args.adapter.as_str()))
+    let device = d.into_iter().find(|d| d.name == args.adapter).unwrap();
+    // controllare se il device esiste
+
+    //d.iter().for_each(|dev| println!("{}", dev.name));
+    let mut cap = Capture::from_device(device)
         .unwrap()
         .promisc(true)
         .timeout(args.timeout)
