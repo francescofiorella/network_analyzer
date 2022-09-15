@@ -2,8 +2,8 @@ use std::io::stdin;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use clap::Parser;
-use cursive::backends::curses::pan::pancurses::{A_BLINK, A_BOLD, A_NORMAL, cbreak, curs_set, endwin, initscr, Input, newwin, noecho, resize_term};
-use cursive::{Cursive, CursiveExt};
+use cursive::backends::curses::pan::pancurses::{ALL_MOUSE_EVENTS, A_BLINK, A_BOLD, A_NORMAL, cbreak, curs_set, endwin, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, A_REVERSE, start_color, init_pair, COLOR_GREEN, COLOR_BLACK, COLOR_PAIR};
+use cursive::{Cursive, CursiveExt, pancurses};
 use cursive::theme::PaletteColor::Highlight;
 use cursive::views::{Dialog, TextView};
 use pcap::{Capture, Device};
@@ -30,13 +30,21 @@ fn main() {
         "RESUME",
     ];
 
+    //Color inizialization
+    start_color();
+    init_pair(1,COLOR_GREEN,COLOR_BLACK);
+
     //screen initialization
     let mut window = initscr();
+
+
     resize_term(37, 80);
     noecho();
     curs_set(0);
     //refresh the screen to match whats in memory
     window.refresh();
+    window.keypad(true);
+    mousemask(ALL_MOUSE_EVENTS, None);
 
     let sub1 = window.subwin(5, 11, 0, 1).unwrap();
     sub1.draw_box(0,0);
@@ -77,6 +85,21 @@ fn main() {
 
         }
         match sub1.getch(){ //getch waits for user key input -> returns Input value assoc. to the key
+            Some(Input::KeyMouse)=>{
+                if let Ok(mouse_event)= getmouse(){
+                    if(mouse_event.y==2){
+                        if(mouse_event.x>=2 && mouse_event.x<8){
+                            running = false;
+                        }
+                    }
+
+                    if(mouse_event.y==3){
+                        if(mouse_event.x>=3 && mouse_event.x<9){
+                            running = true
+                        }
+                    }
+                }
+            }
             Some(Input::KeyUp) => {
                 if menu != 0 {
                     menu -= 1;
