@@ -3,10 +3,95 @@ pub mod sniffer {
     use std::fmt::{Display, Formatter};
     use std::fs::File;
     use std::io::{stdin, stdout, Write};
-    use pcap::{Device, Packet};
+    use pcap::{Activated, Capture, Device, Packet};
+    use std::str::from_utf8;
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::thread::{JoinHandle, sleep, spawn};
+    use std::time::{Duration, SystemTime};
     use rustc_serialize::hex::ToHex;
 
-    pub struct Sniffer {}
+    pub struct Sniffer {
+        running: Arc<Mutex<bool>>,
+        pub jh: JoinHandle<()>,
+        cv: Arc<Condvar>,
+    }
+
+    impl Sniffer {
+        pub fn new(adapter: String, output: String, timeout: i32, filter: String) -> Result<Self, NAError> {
+
+            //Solo per debug: stampo i vari devices
+            let d = Device::list().unwrap();
+            for (i, device) in d.iter().enumerate() {
+                print!("Device {} | ", i);
+                for addr in &device.addresses {
+                    print!("{:?} | ", addr.addr);
+                }
+                println!()
+            }
+
+            let device = match d.into_iter().find(|d| d.name == adapter) {
+                Some(dev) => dev,
+                None => return Err(NAError::new("Device not found")),
+            };
+
+            let mut cap = Capture::from_device(device.clone())
+                .unwrap()
+                .promisc(true)
+                .timeout(timeout)
+                .open()
+                .unwrap();
+
+            let running = Arc::new(Mutex::new(true));
+            let running_cl = running.clone();
+            let cv = Arc::new(Condvar::new());
+            let cv_cl = cv.clone();
+
+            let jh = spawn(move || {
+                let mut vec = Vec::new();
+                loop {
+                    sleep(Duration::from_millis(10));
+                    let mut mg = running_cl.lock().unwrap();
+                    if *mg {
+                        match cap.next_packet() {
+                            Ok(packet) => {
+                                let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+                                let p = NAPacket::new(packet.clone(), timestamp);
+                                //println!("{:?}", p);
+                                vec.push(p);
+                            },
+                            Err(e) => {
+                                println!("ERROR: {}", e);
+                                break
+                            }
+                        }
+                    } else {
+                        println!("****** SNIFFING PAUSED ******");
+                        mg = cv_cl.wait_while(mg, |mg| !*mg).unwrap();
+                        println!("****** SNIFFING RESUMED ******");
+                    }
+                }
+                println!("****** SNIFFING TERMINATED ******");
+            });
+
+            Ok(Sniffer {
+                running,
+                jh,
+                cv,
+            })
+
+            }
+
+        pub fn pause(&self) {
+            let mut mg = self.running.lock().unwrap();
+            *mg = false;
+        }
+
+        pub fn resume(&self) {
+            let mut mg = self.running.lock().unwrap();
+            *mg = true;
+            self.cv.notify_one();
+        }
+    }
 
     #[derive(Debug)]
     pub struct NAPacket {
@@ -14,7 +99,7 @@ pub mod sniffer {
         destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
         //level 3 header
-        pub level_three_type: u8, // 12 - 13
+        level_three_type: u8, // 12 - 13
         header_length: u8, // 14
         explicit_congestion_notification: u8, // 15
         total_length: u16, // 16 - 17
@@ -80,8 +165,8 @@ pub mod sniffer {
             NAPacket{
                 destination_mac_address: to_mac_address(&pcap_packet, 0,5),
                 source_mac_address: to_mac_address(&pcap_packet,6,11),
-                level_three_type: if pcap_packet[12] == 8 {4} else {6},
-                header_length: to_u4(pcap_packet[14])*4,
+                level_three_type: if to_u16(&pcap_packet, 12) == 2048 {4} else {6},
+                header_length: pcap_packet[14],
                 explicit_congestion_notification: pcap_packet[15],
                 total_length: to_u16(&pcap_packet, 16),
                 identification: to_u16(&pcap_packet, 18),
