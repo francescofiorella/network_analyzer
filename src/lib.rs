@@ -8,13 +8,13 @@ pub mod sniffer {
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
     use rustc_serialize::hex::ToHex;
-    use crate::sniffer::NAState::{PAUSED, RESUMED, TERMINATED};
+    use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
     #[derive(Debug)]
     enum NAState {
         RESUMED,
         PAUSED,
-        TERMINATED
+        STOPPED
     }
 
     impl NAState {
@@ -24,8 +24,8 @@ pub mod sniffer {
         fn is_paused(&self) -> bool {
             matches!(self, NAState::PAUSED)
         }
-        fn is_terminated(&self) -> bool {
-            matches!(self, NAState::TERMINATED)
+        fn is_stopped(&self) -> bool {
+            matches!(self, NAState::STOPPED)
         }
     }
 
@@ -71,6 +71,8 @@ pub mod sniffer {
 
             let device_cl = device.clone();
             let output_cl = output.clone();
+            let device_cl_2 = device.clone();
+            let output_cl_2 = output.clone();
             // timeout thread
             spawn(move || {
                 loop {
@@ -78,8 +80,8 @@ pub mod sniffer {
                     let mut mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
-                            let stats = produce_stats(device_cl.clone(), mg.1.clone());
-                            produce_report(output_cl.clone(), stats);
+                            let stats = produce_stats(device_cl_2.clone(), mg.1.clone());
+                            produce_report(output_cl_2.clone(), stats);
                             mg.1 = Vec::new();
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
@@ -102,9 +104,12 @@ pub mod sniffer {
                         match cap.next_packet() {
                             Ok(packet) => {
                                 mg = m_cl.lock().unwrap();
-                                if !mg.0.is_resumed() {
+                                if mg.0.is_paused() {
                                     continue;
+                                } else if mg.0.is_stopped() {
+                                    break;
                                 }
+
                                 let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
                                 let p = NAPacket::new(packet.clone(), timestamp);
                                 //println!("{:?}", p);
@@ -115,10 +120,15 @@ pub mod sniffer {
                                 break;
                             }
                         }
+                    } else if mg.0.is_paused() {
+                        mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
                     } else {
-                        mg = cv_cl.wait_while(mg, |mg| !mg.0.is_resumed()).unwrap();
+                        break
                     }
                 }
+                let mut mg = m_cl.lock().unwrap();
+                let stats = produce_stats(device_cl.clone(), mg.1.clone());
+                produce_report(output_cl.clone(), stats);
                 println!("****** SNIFFING TERMINATED ******");
             });
 
@@ -141,6 +151,12 @@ pub mod sniffer {
             mg.0 = RESUMED;
             self.cv.notify_all();
             println!("****** SNIFFING RESUMED ******");
+        }
+
+        pub fn stop(&self) {
+            let mut mg = self.m.lock().unwrap();
+            mg.0 = STOPPED;
+            self.cv.notify_all();
         }
     }
 
