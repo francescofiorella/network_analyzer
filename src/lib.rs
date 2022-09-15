@@ -30,7 +30,7 @@ pub mod sniffer {
     }
 
     pub struct Sniffer {
-        m: Arc<Mutex<(NAState, Vec<NAPacket>)>>,
+        m: Arc<Mutex<(NAState, Vec<NAPacket>, [Vec<Stats>; 4])>>,
         pub jh: JoinHandle<()>,
         cv: Arc<Condvar>,
         device: Device,
@@ -57,12 +57,30 @@ pub mod sniffer {
 
             let mut cap = Capture::from_device(device.clone())
                 .unwrap()
+                .timeout(10000)
                 .promisc(true)
                 .open()
                 .unwrap();
 
-            let mut vec = Vec::new();
-            let m = Arc::new(Mutex::new((RESUMED, vec)));
+            let vec = Vec::new();
+
+            let device_ipv4_address = device.addresses[0].addr.to_string();
+            let device_ipv6_address = device.addresses[1].addr.to_string();
+            let incoming_ipv4_stats = vec![
+                Stats::new(device_ipv4_address.clone()),
+            ];
+            let incoming_ipv6_stats = vec![
+                Stats::new(device_ipv6_address.clone()),
+            ];
+            let outgoing_ipv4_stats = vec![
+                Stats::new(device_ipv4_address),
+            ];
+            let outgoing_ipv6_stats = vec![
+                Stats::new(device_ipv6_address),
+            ];
+            let stats = [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats];
+
+            let m = Arc::new(Mutex::new((RESUMED, vec, stats)));
             let m_cl = m.clone();
             let m_cl_2 = m.clone();
             let cv = Arc::new(Condvar::new());
@@ -77,11 +95,10 @@ pub mod sniffer {
             spawn(move || {
                 loop {
                     sleep(Duration::from_millis(timeout as u64));
-                    let mut mg_res = m_cl_2.lock();
+                    let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
-                            let stats = produce_stats(device_cl_2.clone(), mg.1.clone());
-                            produce_report(output_cl_2.clone(), stats);
+                            mg.2 = produce_report(output_cl_2.clone(), device_cl_2.clone(), mg.1.clone(), mg.2.clone());
                             mg.1 = Vec::new();
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
@@ -96,7 +113,6 @@ pub mod sniffer {
             let jh = spawn(move || {
                 println!("****** SNIFFING STARTED ******");
                 loop {
-                    //sleep(Duration::from_millis(10));
                     let mut mg = m_cl.lock().unwrap();
                     if mg.0.is_resumed() {
                         // rilascia il lock prima di next_packet() (bloccante)
@@ -126,9 +142,14 @@ pub mod sniffer {
                         break
                     }
                 }
+
                 let mut mg = m_cl.lock().unwrap();
-                let stats = produce_stats(device_cl.clone(), mg.1.clone());
-                produce_report(output_cl.clone(), stats);
+                mg.2 = produce_report(output_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
+
+                // change the mutex, just in case
+                mg.0 = STOPPED;
+                cv_cl.notify_all();
+
                 println!("****** SNIFFING TERMINATED ******");
             });
 
@@ -141,8 +162,7 @@ pub mod sniffer {
 
             println!("****** SNIFFING PAUSED ******");
 
-            let stats = produce_stats(self.device.clone(), mg.1.clone());
-            produce_report(self.report_file_name.clone(), stats);
+            mg.2 = produce_report(self.report_file_name.clone(), self.device.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
         }
 
@@ -302,7 +322,7 @@ pub mod sniffer {
     //}
 
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct Stats {
         ip_address: String,
         port: u16,
@@ -325,120 +345,113 @@ pub mod sniffer {
         }
     }
 
-    fn produce_stats(device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
-        fn update_stats(vec: &mut Vec<Stats>, packet: &NAPacket, packet_port: u16, device_address: String) {
-            let mut iter = vec.iter_mut();
-            loop {
-                let item = iter.next();
-                match item {
-                    // se è la prima volta che riempio il vettore
-                    Some(stats) if stats.port == 0 => {
-                        // aggiorna la porta
-                        stats.port = packet_port;
-                        // aggiungi il protocollo di livello 4
-                        stats.transported_protocols.push(packet.level_four_protocol.clone());
-                        // aggiorna il numero totale di bytes
-                        stats.bytes_number = packet.total_length as u128;
-                        // aggiorna il first timestamp
-                        stats.first_timestamp = packet.timestamp;
-                        // aggiorna il last timestamp
-                        stats.last_timestamp = packet.timestamp;
-                        break;
-                    }
-                    // se il vettore è già stato usato
-                    Some(stats) => {
-                        // controlla se la porta coincide
-                        if stats.port == packet_port {
-                            // queste sono le statistiche, aggiorna!
-                            // aggiungi il protocollo di livello 4, se non c'è
-                            if !stats.transported_protocols.contains(&packet.level_four_protocol) {
-                                stats.transported_protocols.push(packet.level_four_protocol.clone());
-                            }
+    fn produce_report(file_name: String, device: Device, packets: Vec<NAPacket>, old_stats: [Vec<Stats>; 4]) -> [Vec<Stats>; 4] {
+        fn produce_stats(old_stats: [Vec<Stats>; 4], device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
+            fn update_stats(vec: &mut Vec<Stats>, packet: &NAPacket, packet_port: u16, device_address: String) {
+                let mut iter = vec.iter_mut();
+                loop {
+                    let item = iter.next();
+                    match item {
+                        // se è la prima volta che riempio il vettore
+                        Some(stats) if stats.port == 0 => {
+                            // aggiorna la porta
+                            stats.port = packet_port;
+                            // aggiungi il protocollo di livello 4
+                            stats.transported_protocols.push(packet.level_four_protocol.clone());
                             // aggiorna il numero totale di bytes
-                            stats.bytes_number += packet.total_length as u128;
+                            stats.bytes_number = packet.total_length as u128;
+                            // aggiorna il first timestamp
+                            stats.first_timestamp = packet.timestamp;
                             // aggiorna il last timestamp
                             stats.last_timestamp = packet.timestamp;
                             break;
-                        } else {
-                            // statistiche non ancora trovate, continua a cercare!
-                            continue;
+                        }
+                        // se il vettore è già stato usato
+                        Some(stats) => {
+                            // controlla se la porta coincide
+                            if stats.port == packet_port {
+                                // queste sono le statistiche, aggiorna!
+                                // aggiungi il protocollo di livello 4, se non c'è
+                                if !stats.transported_protocols.contains(&packet.level_four_protocol) {
+                                    stats.transported_protocols.push(packet.level_four_protocol.clone());
+                                }
+                                // aggiorna il numero totale di bytes
+                                stats.bytes_number += packet.total_length as u128;
+                                // aggiorna il last timestamp
+                                stats.last_timestamp = packet.timestamp;
+                                break;
+                            } else {
+                                // statistiche non ancora trovate, continua a cercare!
+                                continue;
+                            }
+                        }
+                        // se la statistica non c'è
+                        None => {
+                            // aggiungi una stats
+                            let mut stats = Stats::new(device_address);
+                            // aggiorna la porta
+                            stats.port = packet_port;
+                            // aggiungi il protocollo di livello 4
+                            stats.transported_protocols.push(packet.level_four_protocol.clone());
+                            // aggiorna il numero totale di bytes
+                            stats.bytes_number = packet.total_length as u128;
+                            // aggiorna il first timestamp
+                            stats.first_timestamp = packet.timestamp;
+                            // aggiorna il last timestamp
+                            stats.last_timestamp = packet.timestamp;
+                            // aggiungi stats a vettore
+                            vec.push(stats);
+                            break;
                         }
                     }
-                    // se la statistica non c'è
-                    None => {
-                        // aggiungi una stats
-                        let mut stats = Stats::new(device_address);
-                        // aggiorna la porta
-                        stats.port = packet_port;
-                        // aggiungi il protocollo di livello 4
-                        stats.transported_protocols.push(packet.level_four_protocol.clone());
-                        // aggiorna il numero totale di bytes
-                        stats.bytes_number = packet.total_length as u128;
-                        // aggiorna il first timestamp
-                        stats.first_timestamp = packet.timestamp;
-                        // aggiorna il last timestamp
-                        stats.last_timestamp = packet.timestamp;
-                        // aggiungi stats a vettore
-                        vec.push(stats);
-                        break;
+                }
+            }
+
+            // network address/port pair
+            // protocols transported
+            // cumulated number of bytes transmitted
+            // timestamp of the first and last occurrence of information exchanged
+            // indirizzi del device
+            let device_ipv4_address = device.addresses[0].addr.to_string();
+            let device_ipv6_address = device.addresses[1].addr.to_string();
+
+            let mut incoming_ipv4_stats = old_stats[0].clone();
+            let mut incoming_ipv6_stats = old_stats[1].clone();
+            let mut outgoing_ipv4_stats = old_stats[2].clone();
+            let mut outgoing_ipv6_stats = old_stats[3].clone();
+
+            for packet in packets {
+                // controlla il source address del pacchetto, poi il destination
+                match (&packet.source_address, &packet.destination_address) {
+                    // outgoing packet
+                    (it, _) if *it == device_ipv4_address => {
+                        // se è un outgoing ipv4 packet
+                        update_stats(&mut outgoing_ipv4_stats, &packet, packet.source_port, device_ipv4_address.clone());
+                    }
+                    (it, _) if *it == device_ipv6_address => {
+                        // se è un outgoing ipv6 packet
+                        update_stats(&mut outgoing_ipv6_stats, &packet, packet.source_port, device_ipv6_address.clone());
+                    }
+                    // incoming packet
+                    (_, it) if *it == device_ipv4_address => {
+                        // se è un incoming ipv4 packet
+                        update_stats(&mut incoming_ipv4_stats, &packet, packet.destination_port, device_ipv4_address.clone());
+                    }
+                    (_, it) if *it == device_ipv6_address => {
+                        // se è un incoming ipv6 packet
+                        update_stats(&mut incoming_ipv6_stats, &packet, packet.destination_port, device_ipv6_address.clone());
+                    }
+                    _ => {
+                        println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
+                        // panic!("Should not be possible!");
+                        continue;
                     }
                 }
             }
+            [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats]
         }
-
-        // network address/port pair
-        // protocols transported
-        // cumulated number of bytes transmitted
-        // timestamp of the first and last occurrence of information exchanged
-        // indirizzi del device
-        let device_ipv4_address = device.addresses[0].addr.to_string();
-        let device_ipv6_address = device.addresses[1].addr.to_string();
-        //
-        let mut incoming_ipv4_stats = vec![
-            Stats::new(device_ipv4_address.clone()),
-        ];
-        let mut incoming_ipv6_stats = vec![
-            Stats::new(device_ipv6_address.clone()),
-        ];
-        let mut outgoing_ipv4_stats = vec![
-            Stats::new(device_ipv4_address.clone()),
-        ];
-        let mut outgoing_ipv6_stats = vec![
-            Stats::new(device_ipv6_address.clone()),
-        ];
-        for packet in packets {
-            // controlla il source address del pacchetto, poi il destination
-            match (&packet.source_address, &packet.destination_address) {
-                // outgoing packet
-                (it, _) if *it == device_ipv4_address => {
-                    // se è un outgoing ipv4 packet
-                    update_stats(&mut outgoing_ipv4_stats, &packet, packet.source_port, device_ipv4_address.clone());
-                }
-                (it, _) if *it == device_ipv6_address => {
-                    // se è un outgoing ipv6 packet
-                    update_stats(&mut outgoing_ipv6_stats, &packet, packet.source_port, device_ipv6_address.clone());
-                }
-                // incoming packet
-                (_, it) if *it == device_ipv4_address => {
-                    // se è un incoming ipv4 packet
-                    update_stats(&mut incoming_ipv4_stats, &packet, packet.destination_port, device_ipv4_address.clone());
-                }
-                (_, it) if *it == device_ipv6_address => {
-                    // se è un incoming ipv6 packet
-                    update_stats(&mut incoming_ipv6_stats, &packet, packet.destination_port, device_ipv6_address.clone());
-                }
-                _ => {
-                    println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
-                    // panic!("Should not be possible!");
-                    continue;
-                }
-            }
-        }
-        [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats]
-    }
-
-    fn produce_report(file_name: String, vec: [Vec<Stats>; 4]) {
         // define the path
+        let vec = produce_stats(old_stats, device, packets);
         let mut path = file_name.clone();
         path.push_str(".txt");
         // crea il file o tronca al byte 0 se il file esiste già
@@ -447,7 +460,7 @@ pub mod sniffer {
         writeln!(report, "Sniffer report")
             .expect("Unable to write the report file!");
         writeln!(report).expect("Unable to write the report file!");
-        for (i, stats_group) in vec.iter().enumerate() {
+        for (i, stats_group) in vec.clone().iter().enumerate() {
             writeln!(report, "========================================================================")
                 .expect("Unable to write the report file!");
             writeln!(report).expect("Unable to write the report file!");
@@ -494,6 +507,7 @@ pub mod sniffer {
                 writeln!(report).expect("Unable to write the report file!");
             }
         }
-        println!("Report produced!")
+        println!("Report produced!");
+        vec
     }
 }
