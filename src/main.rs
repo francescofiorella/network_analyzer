@@ -2,6 +2,10 @@ use std::io::stdin;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use clap::Parser;
+use cursive::backends::curses::pan::pancurses::{A_BLINK, A_BOLD, A_NORMAL, cbreak, curs_set, endwin, initscr, Input, newwin, noecho, resize_term};
+use cursive::{Cursive, CursiveExt};
+use cursive::theme::PaletteColor::Highlight;
+use cursive::views::{Dialog, TextView};
 use pcap::{Capture, Device};
 use network_analyzer::sniffer::{Sniffer};
 
@@ -20,38 +24,95 @@ struct Args {
 
 fn main() {
     let args = Args::parse();
-    println!("{}", args.adapter);
-    println!("{}", args.output);
-    println!("{}", args.timeout);
-    println!("{}", args.filter);
 
-    println!("****** COMMANDS ******");
-    println!("Press \"P\" to pause");
-    println!("Press \"R\" to resume");
-    println!("**********************");
-    sleep(Duration::from_secs(5));
+    let commands = vec![
+        "PAUSE",
+        "RESUME",
+    ];
+
+    //screen initialization
+    let mut window = initscr();
+    resize_term(37, 80);
+    noecho();
+    curs_set(0);
+    //refresh the screen to match whats in memory
+    window.refresh();
+
+    let sub1 = window.subwin(5, 11, 0, 1).unwrap();
+    sub1.draw_box(0,0);
+    sub1.mvprintw(1,2, "Command");
+    sub1.keypad(true);
+    sub1.refresh();
+
+    let sub2 = window.subwin(5, 67, 0, 12).unwrap();
+    sub2.draw_box(0,0);
+    sub2.mvprintw(1, 1, "Adapter: ");
+    sub2.mvprintw(1, 9, &args.adapter);
+    sub2.mvprintw(2, 1, "Filter: ");
+    sub2.mvprintw(2, 9, &args.filter);
+    sub2.mvprintw(3, 1, "Output file: ");
+    sub2.mvprintw(3, 14, &args.output);
+    sub2.refresh();
 
     //Application state
     let s = Sniffer::new(args.adapter, args.output, args.timeout, args.filter).unwrap();
 
     //Event loop
+    let mut menu = 0;
+    let mut running = true;
+
     while !s.jh.is_finished() {
-        let mut command = String::new();
-        stdin().read_line(&mut command).unwrap();
-        if command.chars().nth(0).unwrap() == 'P' {
-            s.pause();
-        } else if command.chars().nth(0).unwrap() == 'R' {
+        for (index, command) in commands.iter().enumerate() {
+            if menu == index {
+                sub1.attron(A_BLINK);
+            }
+            else {
+                sub1.attroff(A_BLINK);
+            }
+            if index == 0 {
+                sub1.mvprintw(2, 2, command);
+            } else {
+                sub1.mvprintw(3, 2, command);
+            }
+
+        }
+        match sub1.getch(){ //getch waits for user key input -> returns Input value assoc. to the key
+            Some(Input::KeyUp) => {
+                if menu != 0 {
+                    menu -= 1;
+                    continue;
+                }
+            },
+            Some(Input::KeyDown) =>
+                {
+                    if menu != 1 {
+                        menu += 1;
+                        continue;
+                    }
+                },
+
+            Some(Input::KeyLeft) => {
+                running = if menu == 0 {false} else {true}
+            },
+
+            Some(_) => continue,
+
+            None => (),
+        }
+
+        if running {
             s.resume();
         } else {
-            println!("Unavailable command");
+            s.pause();
         }
+
     }
 
     //Process closing
     s.jh.join().unwrap();
 
-    //let stats = produce_stats(device, vec);
-    //produce_report(stats);
+    endwin(); //screen deallocation
+
 }
 
 
