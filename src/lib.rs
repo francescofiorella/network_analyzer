@@ -1,3 +1,6 @@
+use std::fs::File;
+use pcap::Device;
+
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
@@ -94,7 +97,7 @@ pub mod sniffer {
     }
 
     #[derive(Debug)]
-    pub struct NAPacket {
+     struct NAPacket {
         //level 2 header
         destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
@@ -116,7 +119,7 @@ pub mod sniffer {
         timestamp: u128
     }
 
-    pub fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
+     fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
         let mut s = String::new();
         (start..=end).for_each(|byte| {
             s.push_str(&[p[byte]].to_hex());
@@ -128,7 +131,7 @@ pub mod sniffer {
     }
 
     //da gestire la casistica in cui level_three_type: 6
-    pub fn to_ip_address(p: &Packet,start: usize, end: usize) -> String{
+     fn to_ip_address(p: &Packet,start: usize, end: usize) -> String{
         let mut s = String::new();
         (start..=end).for_each(|byte| {
             s.push_str(&p[byte].to_string());
@@ -139,17 +142,17 @@ pub mod sniffer {
         s
     }
 
-    pub fn to_u16(p: &Packet, start: usize) -> u16 {
+     fn to_u16(p: &Packet, start: usize) -> u16 {
         let param1 : u16 = p[start] as u16 * 256;
         let param2 = p[start+1] as u16;
         param1 + param2
     }
 
-    pub fn to_u4(hlen: u8)-> u8{
+     fn to_u4(hlen: u8)-> u8{
         hlen & 15
     }
 
-    pub fn to_level_four_protocol(prot_num: u8) -> String{
+     fn to_level_four_protocol(prot_num: u8) -> String{
             match prot_num{
                 1 => "ICMP".to_string() ,
                 2 => "IGMP".to_string(),
@@ -161,7 +164,7 @@ pub mod sniffer {
 
 
     impl NAPacket{
-        pub fn new(pcap_packet: Packet, timestamp: u128)-> Self {
+         fn new(pcap_packet: Packet, timestamp: u128)-> Self {
             NAPacket{
                 destination_mac_address: to_mac_address(&pcap_packet, 0,5),
                 source_mac_address: to_mac_address(&pcap_packet,6,11),
@@ -219,20 +222,20 @@ pub mod sniffer {
     }
 
 
-    pub fn na_config(){
-        let mut adapter_name = String::new();
-        let mut report_file_name = String::new();
+    //pub fn na_config(){
+       // let mut adapter_name = String::new();
+       // let mut report_file_name = String::new();
 
-        println!("Select the adapter to sniff: ");
-        println!("{}", list_adapters().unwrap());
-        stdout().flush().unwrap();
-        stdin().read_line(&mut adapter_name).unwrap();
+       // println!("Select the adapter to sniff: ");
+       // println!("{}", list_adapters().unwrap());
+       // stdout().flush().unwrap();
+       // stdin().read_line(&mut adapter_name).unwrap();
 
-        println!("Define .txt report file path and name: ");
-        stdout().flush().unwrap();
-        stdin().read_line(&mut report_file_name).unwrap();
+        // println!("Define .txt report file path and name: ");
+        // stdout().flush().unwrap();
+        // stdin().read_line(&mut report_file_name).unwrap();
 
-    }
+    //}
 
 
     #[derive(Debug)]
@@ -258,7 +261,7 @@ pub mod sniffer {
         }
     }
 
-    pub fn produce_stats(device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
+     fn produce_stats(device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
         fn update_stats(vec: &mut Vec<Stats>, packet: &NAPacket, packet_port: u16, device_address: String) {
             let mut iter = vec.iter_mut();
             loop {
@@ -370,7 +373,7 @@ pub mod sniffer {
         [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats]
     }
 
-    pub fn produce_report(vec: [Vec<Stats>; 4]) {
+    fn produce_report(vec: [Vec<Stats>; 4]) {
         // define the path
         let path = "report.txt";
         // crea il file o tronca al byte 0 se il file esiste già

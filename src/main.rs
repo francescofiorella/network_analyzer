@@ -3,7 +3,7 @@ use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use clap::Parser;
 use pcap::{Capture, Device};
-use network_analyzer::sniffer::{NAPacket, produce_report, produce_stats, Sniffer};
+use network_analyzer::sniffer::{Sniffer};
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
