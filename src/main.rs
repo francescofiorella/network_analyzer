@@ -1,8 +1,7 @@
 use std::io::stdin;
 use std::thread::sleep;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use clap::Parser;
-use pcap::{Capture, Device};
 use network_analyzer::sniffer::{Sniffer};
 
 #[derive(Parser, Debug)]
@@ -10,9 +9,9 @@ use network_analyzer::sniffer::{Sniffer};
 struct Args {
     #[clap(short, long, value_parser)]
     adapter: String,
-    #[clap(short, long, value_parser, default_value = "result.txt")]
+    #[clap(short, long, value_parser, default_value = "report")]
     output: String,
-    #[clap(short, long, value_parser, default_value = "0")]
+    #[clap(short, long, value_parser, default_value = "10000")]
     timeout: i32,
     #[clap(short, long, value_parser, default_value = "None")]
     filter: String,

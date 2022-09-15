@@ -1,22 +1,40 @@
-use std::fs::File;
-use pcap::Device;
-
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
     use std::fs::File;
-    use std::io::{stdin, stdout, Write};
-    use pcap::{Activated, Capture, Device, Packet};
-    use std::str::from_utf8;
+    use std::io::Write;
+    use pcap::{Capture, Device, Packet};
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
     use rustc_serialize::hex::ToHex;
+    use crate::sniffer::NAState::{PAUSED, RESUMED, TERMINATED};
+
+    #[derive(Debug)]
+    enum NAState {
+        RESUMED,
+        PAUSED,
+        TERMINATED
+    }
+
+    impl NAState {
+        fn is_resumed(&self) -> bool {
+            matches!(self, NAState::RESUMED)
+        }
+        fn is_paused(&self) -> bool {
+            matches!(self, NAState::PAUSED)
+        }
+        fn is_terminated(&self) -> bool {
+            matches!(self, NAState::TERMINATED)
+        }
+    }
 
     pub struct Sniffer {
-        running: Arc<Mutex<bool>>,
+        m: Arc<Mutex<(NAState, Vec<NAPacket>)>>,
         pub jh: JoinHandle<()>,
         cv: Arc<Condvar>,
+        device: Device,
+        report_file_name: String
     }
 
     impl Sniffer {
@@ -40,64 +58,94 @@ pub mod sniffer {
             let mut cap = Capture::from_device(device.clone())
                 .unwrap()
                 .promisc(true)
-                .timeout(timeout)
                 .open()
                 .unwrap();
 
-            let running = Arc::new(Mutex::new(true));
-            let running_cl = running.clone();
+            let mut vec = Vec::new();
+            let m = Arc::new(Mutex::new((RESUMED, vec)));
+            let m_cl = m.clone();
+            let m_cl_2 = m.clone();
             let cv = Arc::new(Condvar::new());
             let cv_cl = cv.clone();
+            let cv_cl_2 = cv.clone();
+
+            let device_cl = device.clone();
+            let output_cl = output.clone();
+            // timeout thread
+            spawn(move || {
+                loop {
+                    sleep(Duration::from_millis(timeout as u64));
+                    let mut mg_res = m_cl_2.lock();
+                    match mg_res {
+                        Ok(mut mg) if mg.0.is_resumed() => {
+                            let stats = produce_stats(device_cl.clone(), mg.1.clone());
+                            produce_report(output_cl.clone(), stats);
+                            mg.1 = Vec::new();
+                        }
+                        Ok(mut mg) if mg.0.is_paused() => {
+                            mg = cv_cl_2.wait_while(mg, |mg| !mg.0.is_resumed()).unwrap();
+                            continue
+                        },
+                        _ => break
+                    }
+                }
+            });
 
             let jh = spawn(move || {
-                let mut vec = Vec::new();
+                println!("****** SNIFFING STARTED ******");
                 loop {
-                    sleep(Duration::from_millis(10));
-                    let mut mg = running_cl.lock().unwrap();
-                    if *mg {
+                    //sleep(Duration::from_millis(10));
+                    let mut mg = m_cl.lock().unwrap();
+                    if mg.0.is_resumed() {
+                        // rilascia il lock prima di next_packet() (bloccante)
+                        drop(mg);
                         match cap.next_packet() {
                             Ok(packet) => {
+                                mg = m_cl.lock().unwrap();
+                                if !mg.0.is_resumed() {
+                                    continue;
+                                }
                                 let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
                                 let p = NAPacket::new(packet.clone(), timestamp);
                                 //println!("{:?}", p);
-                                vec.push(p);
-                            },
+                                mg.1.push(p);
+                            }
                             Err(e) => {
                                 println!("ERROR: {}", e);
-                                break
+                                break;
                             }
                         }
                     } else {
-                        println!("****** SNIFFING PAUSED ******");
-                        mg = cv_cl.wait_while(mg, |mg| !*mg).unwrap();
-                        println!("****** SNIFFING RESUMED ******");
+                        mg = cv_cl.wait_while(mg, |mg| !mg.0.is_resumed()).unwrap();
                     }
                 }
                 println!("****** SNIFFING TERMINATED ******");
             });
 
-            Ok(Sniffer {
-                running,
-                jh,
-                cv,
-            })
-
-            }
+            Ok(Sniffer { m, jh, cv, device, report_file_name: output })
+        }
 
         pub fn pause(&self) {
-            let mut mg = self.running.lock().unwrap();
-            *mg = false;
+            let mut mg = self.m.lock().unwrap();
+            mg.0 = PAUSED;
+
+            println!("****** SNIFFING PAUSED ******");
+
+            let stats = produce_stats(self.device.clone(), mg.1.clone());
+            produce_report(self.report_file_name.clone(), stats);
+            mg.1 = Vec::new();
         }
 
         pub fn resume(&self) {
-            let mut mg = self.running.lock().unwrap();
-            *mg = true;
-            self.cv.notify_one();
+            let mut mg = self.m.lock().unwrap();
+            mg.0 = RESUMED;
+            self.cv.notify_all();
+            println!("****** SNIFFING RESUMED ******");
         }
     }
 
-    #[derive(Debug)]
-     struct NAPacket {
+    #[derive(Debug, Clone)]
+    struct NAPacket {
         //level 2 header
         destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
@@ -116,14 +164,14 @@ pub mod sniffer {
         source_port: u16, // 34 - 35
         destination_port: u16, // 36 - 37
         other_data: Vec<u8>,
-        timestamp: u128
+        timestamp: u128,
     }
 
-     fn to_mac_address(p: &Packet, start: usize, end:usize)-> String{
+    fn to_mac_address(p: &Packet, start: usize, end: usize) -> String {
         let mut s = String::new();
         (start..=end).for_each(|byte| {
             s.push_str(&[p[byte]].to_hex());
-            if byte!=end{
+            if byte != end {
                 s.push_str(":");
             }
         });
@@ -131,7 +179,7 @@ pub mod sniffer {
     }
 
     //da gestire la casistica in cui level_three_type: 6
-     fn to_ip_address(p: &Packet,start: usize, end: usize) -> String{
+    fn to_ip_address(p: &Packet, start: usize, end: usize) -> String {
         let mut s = String::new();
         (start..=end).for_each(|byte| {
             s.push_str(&p[byte].to_string());
@@ -142,33 +190,33 @@ pub mod sniffer {
         s
     }
 
-     fn to_u16(p: &Packet, start: usize) -> u16 {
-        let param1 : u16 = p[start] as u16 * 256;
-        let param2 = p[start+1] as u16;
+    fn to_u16(p: &Packet, start: usize) -> u16 {
+        let param1: u16 = p[start] as u16 * 256;
+        let param2 = p[start + 1] as u16;
         param1 + param2
     }
 
-     fn to_u4(hlen: u8)-> u8{
+    fn to_u4(hlen: u8) -> u8 {
         hlen & 15
     }
 
-     fn to_level_four_protocol(prot_num: u8) -> String{
-            match prot_num{
-                1 => "ICMP".to_string() ,
-                2 => "IGMP".to_string(),
-                6 => "TCP".to_string(),
-                17 => "UDP".to_string(),
-                _ => prot_num.to_string()
-            }
+    fn to_level_four_protocol(prot_num: u8) -> String {
+        match prot_num {
+            1 => "ICMP".to_string(),
+            2 => "IGMP".to_string(),
+            6 => "TCP".to_string(),
+            17 => "UDP".to_string(),
+            _ => prot_num.to_string()
+        }
     }
 
 
-    impl NAPacket{
-         fn new(pcap_packet: Packet, timestamp: u128)-> Self {
-            NAPacket{
-                destination_mac_address: to_mac_address(&pcap_packet, 0,5),
-                source_mac_address: to_mac_address(&pcap_packet,6,11),
-                level_three_type: if to_u16(&pcap_packet, 12) == 2048 {4} else {6},
+    impl NAPacket {
+        fn new(pcap_packet: Packet, timestamp: u128) -> Self {
+            NAPacket {
+                destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
+                source_mac_address: to_mac_address(&pcap_packet, 6, 11),
+                level_three_type: if to_u16(&pcap_packet, 12) == 2048 { 4 } else { 6 },
                 header_length: pcap_packet[14],
                 explicit_congestion_notification: pcap_packet[15],
                 total_length: to_u16(&pcap_packet, 16),
@@ -182,28 +230,28 @@ pub mod sniffer {
                 source_port: to_u16(&pcap_packet, 34),
                 destination_port: to_u16(&pcap_packet, 36),
                 other_data: vec![],
-                timestamp
-            }}
-    }
-
-
-
-    #[derive(Debug)]
-    pub struct NAError{
-        message: String,
-    }
-
-    impl NAError{
-        fn new(msg: &str)-> Self{NAError{message: msg.to_string()}}
-    }
-
-    impl Display for NAError{
-        fn fmt(&self, f:&mut Formatter<'_>)-> std::fmt::Result{
-            write!(f,"NAError: {}",self.message)
+                timestamp,
+            }
         }
     }
 
-    impl Error for NAError{}
+
+    #[derive(Debug)]
+    pub struct NAError {
+        message: String,
+    }
+
+    impl NAError {
+        fn new(msg: &str) -> Self { NAError { message: msg.to_string() } }
+    }
+
+    impl Display for NAError {
+        fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+            write!(f, "NAError: {}", self.message)
+        }
+    }
+
+    impl Error for NAError {}
 
 
     pub fn list_adapters() -> Result<String, NAError> {
@@ -223,17 +271,17 @@ pub mod sniffer {
 
 
     //pub fn na_config(){
-       // let mut adapter_name = String::new();
-       // let mut report_file_name = String::new();
+    // let mut adapter_name = String::new();
+    // let mut report_file_name = String::new();
 
-       // println!("Select the adapter to sniff: ");
-       // println!("{}", list_adapters().unwrap());
-       // stdout().flush().unwrap();
-       // stdin().read_line(&mut adapter_name).unwrap();
+    // println!("Select the adapter to sniff: ");
+    // println!("{}", list_adapters().unwrap());
+    // stdout().flush().unwrap();
+    // stdin().read_line(&mut adapter_name).unwrap();
 
-        // println!("Define .txt report file path and name: ");
-        // stdout().flush().unwrap();
-        // stdin().read_line(&mut report_file_name).unwrap();
+    // println!("Define .txt report file path and name: ");
+    // stdout().flush().unwrap();
+    // stdin().read_line(&mut report_file_name).unwrap();
 
     //}
 
@@ -261,7 +309,7 @@ pub mod sniffer {
         }
     }
 
-     fn produce_stats(device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
+    fn produce_stats(device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
         fn update_stats(vec: &mut Vec<Stats>, packet: &NAPacket, packet_port: u16, device_address: String) {
             let mut iter = vec.iter_mut();
             loop {
@@ -291,7 +339,7 @@ pub mod sniffer {
                                 stats.transported_protocols.push(packet.level_four_protocol.clone());
                             }
                             // aggiorna il numero totale di bytes
-                            stats.bytes_number += (packet.total_length as u128);
+                            stats.bytes_number += packet.total_length as u128;
                             // aggiorna il last timestamp
                             stats.last_timestamp = packet.timestamp;
                             break;
@@ -366,16 +414,17 @@ pub mod sniffer {
                 _ => {
                     println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
                     // panic!("Should not be possible!");
-                    continue
+                    continue;
                 }
             }
         }
         [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats]
     }
 
-    fn produce_report(vec: [Vec<Stats>; 4]) {
+    fn produce_report(file_name: String, vec: [Vec<Stats>; 4]) {
         // define the path
-        let path = "report.txt";
+        let mut path = file_name.clone();
+        path.push_str(".txt");
         // crea il file o tronca al byte 0 se il file esiste già
         let mut report = File::create(path).unwrap(); // returns a Result
         // scrivi le stringhe nel report
@@ -429,5 +478,6 @@ pub mod sniffer {
                 writeln!(report).expect("Unable to write the report file!");
             }
         }
+        println!("Report produced!")
     }
 }
