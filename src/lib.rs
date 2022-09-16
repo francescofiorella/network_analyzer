@@ -1,4 +1,5 @@
 pub mod sniffer {
+    use std::env::args;
     use std::error::Error;
     use std::fmt::{Display, Formatter};
     use std::fs::File;
@@ -7,9 +8,40 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{newwin};
+    use cursive::backends::curses::pan::pancurses::{A_BLINK, ALL_MOUSE_EVENTS, curs_set, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, Window};
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
+
+    pub fn tui_init(adapter: &str, filter: &str, output: &str) -> Window {
+        //screen initialization
+        let mut window = initscr();
+
+        //screen settings
+        resize_term(38, 80);
+        noecho();
+        curs_set(0);
+        window.keypad(true);
+        mousemask(ALL_MOUSE_EVENTS, None);
+        window.refresh();
+
+        //subwindow 2
+        let sub2 = window.subwin(5, 67, 0, 12).unwrap();
+        sub2.draw_box(0,0);
+        sub2.mvprintw(1, 1, "Adapter: ");
+        sub2.mvprintw(1, 9, adapter);
+        sub2.mvprintw(2, 1, "Filter: ");
+        sub2.mvprintw(2, 9, filter);
+        sub2.mvprintw(3, 1, "Output file: ");
+        sub2.mvprintw(3, 14, output);
+        sub2.refresh();
+
+        //subwindow 3
+        let sub3 = newwin(33, 78, 5, 1);
+        sub3.draw_box(0,0);
+        sub3.refresh();
+
+        window
+    }
 
     #[derive(Debug)]
     enum NAState {
@@ -35,11 +67,12 @@ pub mod sniffer {
         pub jh: JoinHandle<()>,
         cv: Arc<Condvar>,
         device: Device,
-        report_file_name: String
+        report_file_name: String,
+        tui_handler: Arc<(Option<Window>, Arc<Mutex<bool>>, bool)>,
     }
 
     impl Sniffer {
-        pub fn new(adapter: String, output: String, timeout: i32, filter: String) -> Result<Self, NAError> {
+        pub fn new(adapter: String, output: String, update_time: i32, filter: String, tui: bool) -> Result<Self, NAError> {
 
             //Solo per debug: stampo i vari devices
             let d = Device::list().unwrap();
@@ -62,6 +95,18 @@ pub mod sniffer {
                 .promisc(true)
                 .open()
                 .unwrap();
+
+
+            let mut event_listener = Arc::new(Mutex::new(tui));
+            let mut event_listener_cl = event_listener.clone();
+            let mut main_window = None;
+            let mut tui_handler = Arc::new((main_window, event_listener.clone(), false));
+            let mut tui_handler_cl = tui_handler.clone();
+
+            if tui {
+                main_window = Some(tui_init(&adapter, &filter, &output));
+                tui_handler = Arc::new((main_window, event_listener, true));
+            }
 
             let vec = Vec::new();
 
@@ -95,7 +140,7 @@ pub mod sniffer {
             // timeout thread
             spawn(move || {
                 loop {
-                    sleep(Duration::from_millis(timeout as u64));
+                    sleep(Duration::from_millis(update_time as u64));
                     let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
@@ -111,68 +156,82 @@ pub mod sniffer {
                 }
             });
 
-            let jh = spawn(move || {
+                let jh = spawn(move || {
 
-               let sub3 = newwin(33, 78, 5, 1);
-               sub3.draw_box(0,0);
-               sub3.refresh();
-               let sub4 = newwin(31, 76, 6, 2);
-               sub4.scrollok(true);
-               sub4.setscrreg(6, 30);
+                    let mut sub4 = None;
 
-                println!("****** SNIFFING STARTED ******");
-                loop {
-                    let mut mg = m_cl.lock().unwrap();
-                    if mg.0.is_resumed() {
-                        // rilascia il lock prima di next_packet() (bloccante)
-                        drop(mg);
-                        match cap.next_packet() {
-                            Ok(packet) => {
-                                mg = m_cl.lock().unwrap();
-                                if mg.0.is_paused() {
-                                    continue;
-                                } else if mg.0.is_stopped() {
+                    //subwindow 4
+                    if tui {
+                        sub4 = Some(newwin(31, 76, 6, 2));
+                        sub4.as_ref().unwrap().scrollok(true);
+                        sub4.as_ref().unwrap().setscrreg(6, 30);
+                    }
+
+                    println!("****** SNIFFING STARTED ******");
+                    loop {
+                        let mut mg = m_cl.lock().unwrap();
+                        if mg.0.is_resumed() {
+                            // rilascia il lock prima di next_packet() (bloccante)
+                            drop(mg);
+                            match cap.next_packet() {
+                                Ok(packet) => {
+                                    mg = m_cl.lock().unwrap();
+                                    if mg.0.is_paused() {
+                                        continue;
+                                    } else if mg.0.is_stopped() {
+                                        break;
+                                    }
+
+                                    let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+                                    let p = NAPacket::new(packet.clone(), timestamp);
+
+                                    if tui {
+                                        sub4.as_ref().unwrap().printw(&p.to_string_mac());
+                                        sub4.as_ref().unwrap().printw("\n");
+                                        sub4.as_ref().unwrap().printw(&p.to_string_source_socket());
+                                        sub4.as_ref().unwrap().printw("\n");
+                                        sub4.as_ref().unwrap().printw(&p.to_string_dest_socket());
+                                        sub4.as_ref().unwrap().printw("\n");
+                                        sub4.as_ref().unwrap().printw(&p.info());
+                                        sub4.as_ref().unwrap().printw("\n");
+                                        sub4.as_ref().unwrap().printw("\n");
+                                        sub4.as_ref().unwrap().refresh();
+                                    } else {
+                                        //METTERE COMANDI CON SLEEP E AVVISO DELLA SLEEP
+                                        println!("{:?}", p);
+                                        //FARE EVENT_HANDLER PER QUANDO PREMI P / R / STOP NORMALMENTE SENZA TUI
+                                    }
+
+                                    mg.1.push(p);
+                                }
+                                Err(e) => {
+                                    //IF NOT TUI
+                                    println!("ERROR: {}", e);
                                     break;
                                 }
-
-                                let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-                                let p = NAPacket::new(packet.clone(), timestamp);
-                                println!("{:?}", p);
-                               sub4.printw(&p.to_string_mac());
-                               sub4.printw("\n");
-                               sub4.printw(&p.to_string_source_socket());
-                               sub4.printw("\n");
-                               sub4.printw(&p.to_string_dest_socket());
-                               sub4.printw("\n");
-                               sub4.printw(&p.info());
-                               sub4.printw("\n");
-                               sub4.printw("\n");
-                               sub4.refresh();
-                                mg.1.push(p);
                             }
-                            Err(e) => {
-                                println!("ERROR: {}", e);
-                                break;
-                            }
+                        } else if mg.0.is_paused() {
+                            mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
+                        } else {
+                            break
                         }
-                    } else if mg.0.is_paused() {
-                        mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
-                    } else {
-                        break
                     }
-                }
 
-                let mut mg = m_cl.lock().unwrap();
-                mg.2 = produce_report(output_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
+                    let mut mg = m_cl.lock().unwrap();
+                    mg.2 = produce_report(output_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
 
-                // change the mutex, just in case
-                mg.0 = STOPPED;
-                cv_cl.notify_all();
+                    // change the mutex, just in case
+                    mg.0 = STOPPED;
+                    cv_cl.notify_all();
 
-                println!("****** SNIFFING TERMINATED ******");
-            });
+                    if tui {
+                        *event_listener_cl.lock().unwrap() = false;
+                    }
 
-            Ok(Sniffer { m, jh, cv, device, report_file_name: output })
+                    println!("****** SNIFFING TERMINATED ******");
+                });
+
+            Ok(Sniffer { m, jh, cv, device, report_file_name: output, tui_handler })
         }
 
         pub fn pause(&self) {
@@ -196,8 +255,99 @@ pub mod sniffer {
             let mut mg = self.m.lock().unwrap();
             mg.0 = STOPPED;
             self.cv.notify_all();
+
+            if self.tui_handler.2 {
+                let mut mg = self.tui_handler.1.lock().unwrap();
+                *mg = false;
+            }
         }
+
+        pub fn event_handler(&self) {
+
+            let commands = vec![
+                "PAUSE",
+                "RESUME",
+            ];
+
+            //Event loop
+            let mut menu = 0;
+            let mut running = true;
+
+
+                //subwindow 1
+                let sub1 = self.tui_handler.0.as_ref().unwrap().subwin(5, 11, 0, 1).unwrap();
+                sub1.draw_box(0,0);
+                sub1.mvprintw(1,2, "Command");
+                sub1.keypad(true);
+                sub1.refresh();
+
+                loop {
+                    if *self.tui_handler.1.lock().unwrap() {
+                        for (index, command) in commands.iter().enumerate() {
+                            if menu == index {
+                                sub1.attron(A_BLINK);
+                            } else {
+                                sub1.attroff(A_BLINK);
+                            }
+                            if index == 0 {
+                                sub1.mvprintw(2, 2, command);
+                            } else {
+                                sub1.mvprintw(3, 2, command);
+                            }
+                        }
+                        match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
+                            Some(Input::KeyMouse) => {
+                                if let Ok(mouse_event) = getmouse() {
+                                    if (mouse_event.y == 2) {
+                                        if (mouse_event.x >= 2 && mouse_event.x < 8) {
+                                            running = false;
+                                        }
+                                    }
+
+                                    if (mouse_event.y == 3) {
+                                        if (mouse_event.x >= 3 && mouse_event.x < 9) {
+                                            running = true
+                                        }
+                                    }
+                                }
+                            }
+                            Some(Input::KeyUp) => {
+                                if menu != 0 {
+                                    menu -= 1;
+                                    continue;
+                                }
+                            },
+                            Some(Input::KeyDown) =>
+                                {
+                                    if menu != 1 {
+                                        menu += 1;
+                                        continue;
+                                    }
+                                },
+
+                            Some(Input::KeyRight) => {
+                                running = if menu == 0 { false } else { true }
+                            },
+
+                            Some(_) => continue,
+
+                            None => (),
+                        }
+
+                        if running {
+                            self.resume();
+                        } else {
+                            self.pause();
+                        }
+                    } else {
+                        break;
+                    }
+                }
+                println!("Closing event handler loop");
+            }
     }
+
+
 
     #[derive(Debug, Clone)]
     struct NAPacket {
