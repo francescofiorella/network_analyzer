@@ -2,7 +2,7 @@ use std::io::stdin;
 use std::thread::sleep;
 use std::time::{Duration, SystemTime};
 use clap::Parser;
-use cursive::backends::curses::pan::pancurses::{ALL_MOUSE_EVENTS, A_BLINK, A_BOLD, A_NORMAL, cbreak, curs_set, endwin, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, A_REVERSE, start_color, init_pair, COLOR_GREEN, COLOR_BLACK, COLOR_PAIR};
+use cursive::backends::curses::pan::pancurses::{ALL_MOUSE_EVENTS, A_BLINK, A_BOLD, A_NORMAL, cbreak, curs_set, endwin, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, A_REVERSE, start_color, init_pair, COLOR_GREEN, COLOR_BLACK, COLOR_PAIR, COLOR_WHITE};
 use cursive::{Cursive, CursiveExt, pancurses};
 use cursive::theme::PaletteColor::Highlight;
 use cursive::views::{Dialog, TextView};
@@ -30,13 +30,13 @@ fn main() {
         "RESUME",
     ];
 
-    //Color inizialization
-    start_color();
-    init_pair(1,COLOR_GREEN,COLOR_BLACK);
-
     //screen initialization
     let mut window = initscr();
 
+    //Color inizialization
+    start_color();
+    init_pair(1,COLOR_WHITE,COLOR_BLACK);
+    window.attron(COLOR_PAIR(1));
 
     resize_term(38, 80);
     noecho();
@@ -133,7 +133,7 @@ fn main() {
 
     //Process closing
     s.jh.join().unwrap();
-
+    window.attroff(COLOR_PAIR(1));
     endwin(); //screen deallocation
 
 }
