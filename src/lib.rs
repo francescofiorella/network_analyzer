@@ -1,5 +1,4 @@
 pub mod sniffer {
-    use std::env::args;
     use std::error::Error;
     use std::fmt::{Display, Formatter};
     use std::fs::File;
@@ -355,20 +354,13 @@ pub mod sniffer {
         destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
         //level 3 header
-        level_three_type: u8, // 12 - 13
-        header_length: u8, // 14
-        explicit_congestion_notification: u8, // 15
-        total_length: u16, // 16 - 17
-        identification: u16, // 18 - 19
-        fragment_offset: u16, // 20 - 21
-        ttl: u8, // 22
+        level_three_type: String, // 12 - 13
+        total_length: u32, // 16 - 17
         level_four_protocol: String, // 23
-        header_checksum: u16, // 24 - 25
         source_address: String, // 26 - 29
         destination_address: String, // 30 - 33
         source_port: u16, // 34 - 35
         destination_port: u16, // 36 - 37
-        other_data: Vec<u8>,
         timestamp: u128
     }
 
@@ -415,26 +407,34 @@ pub mod sniffer {
         }
     }
 
+    fn to_level_three_protocol(prot_num: u16)-> String{
+        match prot_num{
+            2048 => "IPv4".to_string(),
+            2054 => "ARP".to_string(),
+            33024 => "IEEE 802.1Q".to_string(),
+            35041 => "HomePlug AV".to_string(),
+            34525 => "IPv6".to_string(),
+            _ => "Unknown".to_string()
+        }
+    }
+
 
     impl NAPacket {
         fn new(pcap_packet: Packet, timestamp: u128) -> Self {
             NAPacket {
                 destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
                 source_mac_address: to_mac_address(&pcap_packet, 6, 11),
-                level_three_type: if to_u16(&pcap_packet, 12) == 2048 { 4 } else { 6 },
-                header_length: pcap_packet[14],
-                explicit_congestion_notification: pcap_packet[15],
-                total_length: to_u16(&pcap_packet, 16),
-                identification: to_u16(&pcap_packet, 18),
-                fragment_offset: to_u16(&pcap_packet, 20),
-                ttl: pcap_packet[22],
+                level_three_type: to_level_three_protocol(to_u16(&pcap_packet,12)),
+
+
+                total_length: pcap_packet.header.len,
+
                 level_four_protocol: to_level_four_protocol(pcap_packet[23]),
-                header_checksum: to_u16(&pcap_packet, 24),
                 source_address: to_ip_address(&pcap_packet, 26, 29),
                 destination_address: to_ip_address(&pcap_packet, 30, 33),
                 source_port: to_u16(&pcap_packet, 34),
                 destination_port: to_u16(&pcap_packet, 36),
-                other_data: vec![],
+
                 timestamp
             }}
 
@@ -643,7 +643,7 @@ pub mod sniffer {
                         update_stats(&mut incoming_ipv6_stats, &packet, packet.destination_port, device_ipv6_address.clone());
                     }
                     _ => {
-                        println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
+                        //println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
                         // panic!("Should not be possible!");
                         continue;
                     }
