@@ -38,7 +38,7 @@ fn main() {
     let mut window = initscr();
 
 
-    resize_term(37, 80);
+    resize_term(38, 80);
     noecho();
     curs_set(0);
     //refresh the screen to match whats in memory
@@ -114,7 +114,7 @@ fn main() {
                     }
                 },
 
-            Some(Input::KeyLeft) => {
+            Some(Input::KeyRight) => {
                 running = if menu == 0 {false} else {true}
             },
 

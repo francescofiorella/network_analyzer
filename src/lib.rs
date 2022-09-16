@@ -51,8 +51,12 @@ pub mod sniffer {
             let cv_cl = cv.clone();
 
             let jh = spawn(move || {
-                let sub3 = newwin(32, 78, 5, 1);
+                let sub3 = newwin(33, 78, 5, 1);
                 sub3.draw_box(0,0);
+                sub3.refresh();
+                let sub4 = newwin(31, 76, 6, 2);
+                sub4.scrollok(true);
+                sub4.setscrreg(6, 30);
 
                 let mut vec = Vec::new();
                 let mut y = 0;
@@ -68,16 +72,17 @@ pub mod sniffer {
                                 }  else {
                                     let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
                                     let p = NAPacket::new(packet.clone(), timestamp);
-
-                                    sub3.mvprintw({y +=1; y}, 3, &p.to_string_mac());
-                                    sub3.mvprintw({y +=1; y}, 3, &p.to_string_source_socket());
-                                    sub3.mvprintw({y +=1; y}, 3, &p.to_string_dest_socket());
-                                    sub3.mvprintw({y +=1; y}, 3, &p.info());
-                                    if y == 29 {
-                                        y = -1;
-                                    }
-                                    y += 1;
-                                    sub3.refresh();
+                                    println!("{:?}", p);
+                                    sub4.printw(&p.to_string_mac());
+                                    sub4.printw("\n");
+                                    sub4.printw(&p.to_string_source_socket());
+                                    sub4.printw("\n");
+                                    sub4.printw(&p.to_string_dest_socket());
+                                    sub4.printw("\n");
+                                    sub4.printw(&p.info());
+                                    sub4.printw("\n");
+                                    sub4.printw("\n");
+                                    sub4.refresh();
                                     vec.push(p);
                                 }
                             },
