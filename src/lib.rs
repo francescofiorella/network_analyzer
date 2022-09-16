@@ -207,15 +207,20 @@ pub mod sniffer {
         //level 2 header
         destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
+
         //level 3 header
         level_three_type: String, // 12 - 13
         total_length: u32, // 16 - 17
-        level_four_protocol: String, // 23
         source_address: String, // 26 - 29
         destination_address: String, // 30 - 33
+
+        //level 4 header
+        level_four_protocol: String, // 23
         source_port: u16, // 34 - 35
         destination_port: u16, // 36 - 37
-        timestamp: u128
+
+        timestamp: u128,
+        other: String
     }
 
     fn to_mac_address(p: &Packet, start: usize, end: usize) -> String {
@@ -241,6 +246,30 @@ pub mod sniffer {
         s
     }
 
+    fn to_ipv6_address(p: &Packet, start: usize, end: usize)-> String{
+        let mut s = String::new();
+        let mut count = 0;
+        (start..end).for_each(|byte|{
+                if &p[byte].to_string() == "0" {
+                    count += 1;
+                }else{
+                    if count!=0{
+                        if count==1 {
+                            s.push_str("0:");
+                        }else{
+                            s.push_str(":");
+                        }
+                        count = 0;
+                    }
+                    s.push_str(&[p[byte]].to_hex());
+                    if byte!= end {
+                        s.push_str(":");
+                    }
+                }
+        });
+        s
+    }
+
     fn to_u16(p: &Packet, start: usize) -> u16 {
         let param1: u16 = p[start] as u16 * 256;
         let param2 = p[start + 1] as u16;
@@ -257,17 +286,18 @@ pub mod sniffer {
             2 => "IGMP".to_string(),
             6 => "TCP".to_string(),
             17 => "UDP".to_string(),
+            58 => "ICMPv6".to_string(),
             _ => prot_num.to_string()
         }
     }
 
     fn to_level_three_protocol(prot_num: u16)-> String{
         match prot_num{
-            2048 => "IPv4".to_string(),
-            2054 => "ARP".to_string(),
-            33024 => "IEEE 802.1Q".to_string(),
-            35041 => "HomePlug AV".to_string(),
-            34525 => "IPv6".to_string(),
+            2048 => "IPv4".to_string(), // 0x0800
+            2054 => "ARP".to_string(), // 0x0806
+            33024 => "IEEE 802.1Q".to_string(), // 0x8100
+            35041 => "HomePlug AV".to_string(), // 0x88e1
+            34525 => "IPv6".to_string(), // 0x86dd
             _ => "Unknown".to_string()
         }
     }
@@ -275,21 +305,69 @@ pub mod sniffer {
 
     impl NAPacket {
         fn new(pcap_packet: Packet, timestamp: u128) -> Self {
+            let mut eth_type = to_u16(&pcap_packet,12);
             NAPacket {
                 destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
                 source_mac_address: to_mac_address(&pcap_packet, 6, 11),
+
                 level_three_type: to_level_three_protocol(to_u16(&pcap_packet,12)),
 
+                other: match eth_type {
+                    2054 => if pcap_packet[21] ==1 {"ARP Request".to_string()}else{"ARP Reply".to_string()}, // ARP, OpCode byte 21 = 1 Request, 2 Reply
+                    _ => " ".to_string()
+                },
+
+                source_address: match eth_type {
+                    2048 => to_ip_address(&pcap_packet, 26, 29) , //IPv4
+                    2054 => to_ip_address(&pcap_packet, 28, 31), // ARP Sender IP
+                    34525 => to_ipv6_address(&pcap_packet, 22, 37), //IPv6
+                    _ => " ".to_string()
+                } ,
+
+                destination_address: match eth_type {
+                    2048 => to_ip_address(&pcap_packet, 30, 33), //IPv4
+                    2054 => to_ip_address(&pcap_packet, 38, 41), // ARP Target IP
+                    34525 => to_ipv6_address(&pcap_packet, 38, 53), //IPv6
+                    _ => " ".to_string()
+                } ,
 
                 total_length: pcap_packet.header.len,
 
-                level_four_protocol: to_level_four_protocol(pcap_packet[23]),
-                source_address: to_ip_address(&pcap_packet, 26, 29),
-                destination_address: to_ip_address(&pcap_packet, 30, 33),
-                source_port: to_u16(&pcap_packet, 34),
-                destination_port: to_u16(&pcap_packet, 36),
+                level_four_protocol: match eth_type{
+                    2048 => to_level_four_protocol(pcap_packet[23]), //IPv4
+                    34525 => match pcap_packet[20]{ //IPv6 byte 20 is Next Header
+                        6 | 17 | 58 => to_level_four_protocol(pcap_packet[20]) , //IPv6 + TCP or IPv6 + UDP IPv6 + ICMPv6
+                        _ => "".to_string()
+                    } ,
+                    _ => "".to_string()
+                } ,
 
-                timestamp
+                source_port: match eth_type{
+                    2048 => match pcap_packet[23] { //IPV4
+                        6 | 17 => to_u16(&pcap_packet, 34), //IPV4 + TCP o IPV4+ UDP
+                        _ => 0 as u16 // 0 for IGMP, ICMP
+                    },
+                    34525 => match pcap_packet[20]{ // IPv6
+                        6 | 17  => to_u16(&pcap_packet, 54), //IPV6 + TCP o UDP
+                        _ => 0 as u16
+                    }
+                    _ => 0 as u16
+                }
+                ,
+                destination_port:  match eth_type{
+                    2048 => match pcap_packet[23] { //IPV4
+                        6 | 17 => to_u16(&pcap_packet, 36), //IPV4 + TCP o UDP
+                        _ => 0 as u16 // 0 for IGMP, ICMP
+                    },
+                    34525 => match pcap_packet[20]{ // IPv6
+                        6 | 17 => to_u16(&pcap_packet, 56), //IPV6 + TCP o UDP
+                        _ => 0 as u16
+                    }
+                    _ => 0 as u16
+                },
+
+                timestamp,
+
             }}
 
         fn to_string_mac(&self) -> String {
