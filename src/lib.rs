@@ -1,6 +1,3 @@
-use std::fs::File;
-use pcap::Device;
-
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
@@ -48,15 +45,16 @@ pub mod sniffer {
             let report_file_name_cl = report_file_name.clone();
             let report_file_name_cl_2 = report_file_name.clone();
 
-            //Solo per debug: stampo i vari devices
             let d = Device::list().unwrap();
+
+            /*//Solo per debug: stampo i vari devices
             for (i, device) in d.iter().enumerate() {
                 //print!("Device {} | ", i);
                 for addr in &device.addresses {
                     //print!("{:?} | ", addr.addr);
                 }
                 //println!()
-            }
+            }*/
 
             let device = match d.into_iter().find(|d| d.name == adapter) {
                 Some(dev) => dev,
@@ -149,6 +147,9 @@ pub mod sniffer {
                                 }
 
                                 let p = NAPacket::new(packet.clone());
+
+                                // now check the filter
+
                                 //println!("{:?}", p);
                                 sub4.printw(&p.to_string_mac());
                                 sub4.printw("\n");
@@ -161,6 +162,8 @@ pub mod sniffer {
                                 sub4.printw("\n");
                                 sub4.refresh();
                                 mg.1.push(p);
+
+                                // end of the filter check
                             }
                             Err(e) => {
                                 println!("ERROR: {}", e);
