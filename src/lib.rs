@@ -1,6 +1,3 @@
-use std::fs::File;
-use pcap::Device;
-
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
@@ -10,7 +7,7 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{newwin, Window};
+    use cursive::backends::curses::pan::pancurses::{newwin};
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -116,12 +113,12 @@ pub mod sniffer {
 
             let jh = spawn(move || {
 
-                let sub3 = newwin(33, 78, 5, 1);
-                sub3.draw_box(0,0);
-                sub3.refresh();
-                let sub4 = newwin(31, 76, 6, 2);
-                sub4.scrollok(true);
-                sub4.setscrreg(6, 30);
+               let sub3 = newwin(33, 78, 5, 1);
+               sub3.draw_box(0,0);
+               sub3.refresh();
+               let sub4 = newwin(31, 76, 6, 2);
+               sub4.scrollok(true);
+               sub4.setscrreg(6, 30);
 
                 println!("****** SNIFFING STARTED ******");
                 loop {
@@ -141,16 +138,16 @@ pub mod sniffer {
                                 let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
                                 let p = NAPacket::new(packet.clone(), timestamp);
                                 println!("{:?}", p);
-                                sub4.printw(&p.to_string_mac());
-                                sub4.printw("\n");
-                                sub4.printw(&p.to_string_source_socket());
-                                sub4.printw("\n");
-                                sub4.printw(&p.to_string_dest_socket());
-                                sub4.printw("\n");
-                                sub4.printw(&p.info());
-                                sub4.printw("\n");
-                                sub4.printw("\n");
-                                sub4.refresh();
+                               sub4.printw(&p.to_string_mac());
+                               sub4.printw("\n");
+                               sub4.printw(&p.to_string_source_socket());
+                               sub4.printw("\n");
+                               sub4.printw(&p.to_string_dest_socket());
+                               sub4.printw("\n");
+                               sub4.printw(&p.info());
+                               sub4.printw("\n");
+                               sub4.printw("\n");
+                               sub4.refresh();
                                 mg.1.push(p);
                             }
                             Err(e) => {

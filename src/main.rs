@@ -30,13 +30,8 @@ fn main() {
         "RESUME",
     ];
 
-    //Color inizialization
-    start_color();
-    init_pair(1,COLOR_GREEN,COLOR_BLACK);
-
     //screen initialization
     let mut window = initscr();
-
 
     resize_term(38, 80);
     noecho();
