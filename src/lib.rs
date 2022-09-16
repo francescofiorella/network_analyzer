@@ -123,7 +123,6 @@ pub mod sniffer {
                 sub4.scrollok(true);
                 sub4.setscrreg(6, 30);
 
-                let mut vec = Vec::new();
                 println!("****** SNIFFING STARTED ******");
                 loop {
                     let mut mg = m_cl.lock().unwrap();
