@@ -1,3 +1,6 @@
+use std::fs::File;
+use pcap::Device;
+
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
@@ -9,6 +12,7 @@ pub mod sniffer {
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_BLINK, A_REVERSE, ALL_MOUSE_EVENTS, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, getmouse, init_pair, initscr, Input, mousemask, newwin, noecho, resize_term, start_color, Window};
     use rustc_serialize::hex::ToHex;
+    use crate::sniffer::format::get_file_name;
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
     const RUN: &str = "****** SNIFFING PACKETS... ******";
@@ -131,7 +135,10 @@ pub mod sniffer {
     }
 
     impl Sniffer {
-        pub fn new(adapter: String, output: String, update_time: i32, filter: String, tui: bool) -> Result<Self, NAError> {
+        pub fn new(adapter: String, output: String, update_time: u64, filter: String, tui: bool) -> Result<Self, NAError> {
+            let report_file_name = get_file_name(output);
+            let report_file_name_cl = report_file_name.clone();
+            let report_file_name_cl_2 = report_file_name.clone();
 
             //Solo per debug: stampo i vari devices
             let d = Device::list().unwrap();
@@ -147,14 +154,6 @@ pub mod sniffer {
                 Some(dev) => dev,
                 None => return Err(NAError::new("Device not found")),
             };
-
-            let mut cap = Capture::from_device(device.clone())
-                .unwrap()
-                .timeout(10000)
-                .promisc(true)
-                .open()
-                .unwrap();
-
 
             let mut event_listener = Arc::new(Mutex::new(tui));
             let mut main_window = None;
@@ -173,7 +172,8 @@ pub mod sniffer {
                 }
             }
 
-            let vec = Vec::new();
+            let device_cl = device.clone();
+            let device_cl_2 = device.clone();
 
             let device_ipv4_address = device.addresses[0].addr.to_string();
             let device_ipv6_address = device.addresses[1].addr.to_string();
@@ -191,6 +191,8 @@ pub mod sniffer {
             ];
             let stats = [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats];
 
+            let vec = Vec::new();
+
             let m = Arc::new(Mutex::new((RESUMED, vec, stats)));
             let m_cl = m.clone();
             let m_cl_2 = m.clone();
@@ -198,18 +200,14 @@ pub mod sniffer {
             let cv_cl = cv.clone();
             let cv_cl_2 = cv.clone();
 
-            let device_cl = device.clone();
-            let output_cl = output.clone();
-            let device_cl_2 = device.clone();
-            let output_cl_2 = output.clone();
             // timeout thread
             spawn(move || {
                 loop {
-                    sleep(Duration::from_millis(update_time as u64));
+                    sleep(Duration::from_millis(update_time));
                     let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
-                            mg.2 = produce_report(output_cl_2.clone(), device_cl_2.clone(), mg.1.clone(), mg.2.clone());
+                            mg.2 = produce_report(report_file_name_cl_2.clone(), device_cl_2.clone(), mg.1.clone(), mg.2.clone());
                             mg.1 = Vec::new();
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
@@ -232,6 +230,14 @@ pub mod sniffer {
                     sub4.as_ref().unwrap().setscrreg(7, 30);
                 }
 
+                let mut cap = Capture::from_device(device_cl.clone())
+                    .unwrap()
+                    .timeout(10000)
+                    .promisc(true)
+                    .open()
+                    .unwrap();
+
+                //println!("****** SNIFFING STARTED ******");
                 loop {
                     let mut mg = m_cl.lock().unwrap();
                     if mg.0.is_resumed() {
@@ -241,13 +247,22 @@ pub mod sniffer {
                             Ok(packet) => {
                                 mg = m_cl.lock().unwrap();
                                 if mg.0.is_paused() {
+                                    drop(cap);
+                                    mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
+                                    cap = Capture::from_device(device_cl.clone())
+                                        .unwrap()
+                                        .timeout(10000)
+                                        .promisc(true)
+                                        .open()
+                                        .unwrap();
                                     continue;
                                 } else if mg.0.is_stopped() {
                                     break;
                                 }
 
-                                let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-                                let p = NAPacket::new(packet.clone(), timestamp);
+                                let p = NAPacket::new(packet.clone());
+
+                                // now check the filter
 
                                 match tui {
                                     true => p.print_packet(sub4.as_ref()),
@@ -255,6 +270,8 @@ pub mod sniffer {
                                 }
 
                                 mg.1.push(p);
+
+                                // end of the filter check
                             }
                             Err(e) => {
                                match tui {
@@ -270,14 +287,21 @@ pub mod sniffer {
                             }
                         }
                     } else if mg.0.is_paused() {
+                        drop(cap);
                         mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
+                        cap = Capture::from_device(device_cl.clone())
+                            .unwrap()
+                            .timeout(10000)
+                            .promisc(true)
+                            .open()
+                            .unwrap();
                     } else {
                         break
                     }
                 }
 
                 let mut mg = m_cl.lock().unwrap();
-                mg.2 = produce_report(output_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
+                mg.2 = produce_report(report_file_name_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
 
                 // change the mutex, just in case of internal error
                 mg.0 = STOPPED;
@@ -289,7 +313,7 @@ pub mod sniffer {
                 println!("Sniffing thread exiting");
             });
 
-            Ok(Sniffer { m, jh, cv, device, report_file_name: output, tui_handler })
+            Ok(Sniffer { m, jh, cv, device, report_file_name, tui_handler })
         }
 
         pub fn pause(&self) {
@@ -610,7 +634,7 @@ pub mod sniffer {
                     _ => 0 as u16
                 },
 
-                timestamp,
+                timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis(),
 
             }}
 
@@ -842,10 +866,8 @@ pub mod sniffer {
         }
         // define the path
         let vec = produce_stats(old_stats, device, packets);
-        let mut path = file_name.clone();
-        path.push_str(".txt");
         // crea il file o tronca al byte 0 se il file esiste già
-        let mut report = File::create(path).unwrap(); // returns a Result
+        let mut report = File::create(file_name.clone()).unwrap(); // returns a Result
         // scrivi le stringhe nel report
         writeln!(report, "Sniffer report")
             .expect("Unable to write the report file!");
@@ -899,5 +921,15 @@ pub mod sniffer {
         }
         println!("Report produced!");
         vec
+    }
+
+    mod format {
+        pub fn get_file_name(mut string: String) -> String {
+            string = string.trim().to_string();
+            if !string.ends_with(".txt") {
+                string.push_str(".txt");
+            }
+            string
+        }
     }
 }

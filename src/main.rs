@@ -14,10 +14,10 @@ use network_analyzer::sniffer::{Sniffer};
 struct Args {
     #[clap(short, long, value_parser)]
     adapter: String,
-    #[clap(short, long, value_parser, default_value = "result.txt")]
+    #[clap(short, long, value_parser, default_value = "result")]
     output: String,
-    #[clap(short, long, value_parser, default_value = "0")]
-    update_time: i32,
+    #[clap(short, long, value_parser, default_value = "10000")]
+    update_time: u64,
     #[clap(short, long, value_parser, default_value = "None")]
     filter: String,
     #[clap(short, long, value_parser, default_value = "false")]
