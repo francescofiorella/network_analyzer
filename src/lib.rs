@@ -803,6 +803,8 @@ pub mod sniffer {
     }
 
     mod format {
+        use std::fmt::Display;
+
         pub fn get_file_name(mut string: String) -> String {
             string = string.trim().to_string();
             if !string.ends_with(".txt") {
@@ -811,7 +813,7 @@ pub mod sniffer {
             string
         }
 
-        pub fn option_to_string(opt: Option<u16>) -> String {
+        pub fn option_to_string<T: Display>(opt: Option<T>) -> String {
             match opt {
                 Some(num) => num.to_string(),
                 None => String::from("None")
