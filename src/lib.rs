@@ -7,7 +7,7 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{A_BLINK, ALL_MOUSE_EVENTS, curs_set, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, Window};
+    use cursive::backends::curses::pan::pancurses::{A_BLINK, A_REVERSE, ALL_MOUSE_EVENTS, curs_set, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, Window};
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -352,9 +352,9 @@ pub mod sniffer {
                 if *self.tui_handler.1.lock().unwrap() {
                     for (mut index, command) in commands.iter().enumerate() {
                         if menu == index as u8 {
-                            sub1.attron(A_BLINK);
+                            sub1.attron(A_REVERSE);
                         } else {
-                            sub1.attroff(A_BLINK);
+                            sub1.attroff(A_REVERSE);
                         }
                         sub1.mvprintw({index += 2; index as i32}, 2, command);
                     }
@@ -362,9 +362,9 @@ pub mod sniffer {
                         Some(Input::KeyMouse) => {
                             if let Ok(mouse_event) = getmouse() {
                                 match mouse_event.y {
-                                    2 if mouse_event.x >= 2 && mouse_event.x < 8 => running = 0u8,
-                                    3 if mouse_event.x >= 3 && mouse_event.x < 9 => running = 1u8,
-                                    4 if mouse_event.x >= 3 && mouse_event.x < 7 => running = 2u8,
+                                    2 if mouse_event.x >= 2 && mouse_event.x < 8 => {running = 0u8; menu=0},
+                                    3 if mouse_event.x >= 3 && mouse_event.x < 9 => {running = 1u8; menu=1},
+                                    4 if mouse_event.x >= 3 && mouse_event.x < 7 => {running = 2u8; menu=2},
                                     _ => (),
                                 }
                             }
@@ -384,6 +384,10 @@ pub mod sniffer {
                             },
 
                         Some(Input::KeyRight) => {
+                            running = menu
+                        },
+
+                        Some(Input::Character('\n')) => {
                             running = menu
                         },
 
