@@ -27,14 +27,11 @@ pub mod sniffer {
         init_pair(4,COLOR_GREEN,COLOR_BLACK);
         init_pair(5,COLOR_BLUE,COLOR_BLACK);
 
-
-
         //screen settings
-        resize_term(42, 80);
+        resize_term(0, 0);
         noecho();
         curs_set(0);
         window.keypad(true);
-        mousemask(ALL_MOUSE_EVENTS, None);
         window.refresh();
 
         //subwindow 2
@@ -72,9 +69,9 @@ pub mod sniffer {
 
         let commands = "\
         ****** Commands ******\n\
-        Press \"P\" to pause\n\
-        Press \"R\" to resume\n\
-        Press \"Q\" to quit \n\
+        Press \"P + Enter\" to pause\n\
+        Press \"R + Enter\" to resume\n\
+        Press \"Q + Enter\" to quit \n\
         **********************\n\
         Starting sniffing...";
 
@@ -128,7 +125,7 @@ pub mod sniffer {
         cv: Arc<Condvar>,
         device: Device,
         report_file_name: String,
-        tui_handler: (Option<Window>, Arc<Mutex<bool>>, bool, Option<Window>),
+        tui_handler: (Option<Window>, bool, Option<Window>),
     }
 
     impl Sniffer {
@@ -152,17 +149,15 @@ pub mod sniffer {
                 None => return Err(NAError::new("Device not found")),
             };
 
-            let mut event_listener = Arc::new(Mutex::new(tui));
             let mut main_window = None;
             let mut state_window = None;
-            let mut tui_handler = (main_window, event_listener.clone(), false, state_window);
-            let mut event_listener_cl = event_listener.clone();
+            let mut tui_handler = (main_window, false, state_window);
 
             match tui {
                 true => {
                     main_window = Some(tui_init(&adapter, &filter, &output, update_time));
                     state_window = Some(state_win_init());
-                    tui_handler = (main_window, event_listener, true, state_window);
+                    tui_handler = (main_window, true, state_window);
                 }
                 false => {
                     notui_show_commands();
@@ -224,7 +219,7 @@ pub mod sniffer {
                 if tui {
                     sub4 = Some(newwin(31, 76, 10, 2));
                     sub4.as_ref().unwrap().scrollok(true);
-                    sub4.as_ref().unwrap().setscrreg(7, 30);
+                    sub4.as_ref().unwrap().setscrreg(0, 30);
                 }
 
                 let mut cap = Capture::from_device(device_cl.clone())
@@ -275,6 +270,9 @@ pub mod sniffer {
                                    true => {
                                        sub4.as_ref().unwrap().clear();
                                        sub4.as_ref().unwrap().printw(e.to_string().as_str());
+                                       sub4.as_ref().unwrap().printw("\n");
+                                       sub4.as_ref().unwrap().printw("Press any key to quit");
+                                       sub4.as_ref().unwrap().refresh();
                                        //to make the error visible
                                        sleep(Duration::from_secs(2));
                                    },
@@ -303,10 +301,7 @@ pub mod sniffer {
                 // change the mutex, just in case of internal error
                 mg.0 = STOPPED;
                 cv_cl.notify_all();
-                // blocks the TUI event handler in case of internal error
-                if tui {
-                    *event_listener_cl.lock().unwrap() = false;
-                }
+
                 println!("Sniffing thread exiting");
             });
 
@@ -317,7 +312,7 @@ pub mod sniffer {
             let mut mg = self.m.lock().unwrap();
             mg.0 = PAUSED;
 
-            print_state(self.tui_handler.3.as_ref(), &(mg.0));
+            print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
             mg.2 = produce_report(self.report_file_name.clone(), self.device.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
@@ -327,7 +322,7 @@ pub mod sniffer {
             let mut mg = self.m.lock().unwrap();
             mg.0 = RESUMED;
 
-            print_state(self.tui_handler.3.as_ref(), &(mg.0));
+            print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
             self.cv.notify_all();
         }
@@ -336,18 +331,14 @@ pub mod sniffer {
             let mut mg = self.m.lock().unwrap();
             mg.0 = STOPPED;
 
-            print_state(self.tui_handler.3.as_ref(), &(mg.0));
+            print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
             self.cv.notify_all();
 
-            if self.tui_handler.2 {
-                let mut mg = self.tui_handler.1.lock().unwrap();
-                *mg = false;
-            }
         }
 
         pub fn enable_commands(&self) {
-            match self.tui_handler.2 {
+            match self.tui_handler.1 {
                 true => {
                     self.tui_event_handler(); //blocking function until stop
                 }
@@ -380,7 +371,7 @@ pub mod sniffer {
             let mut running= 0u8;
 
             loop {
-                if *self.tui_handler.1.lock().unwrap() {
+                if !self.m.lock().unwrap().0.is_stopped() {
                     for (mut index, command) in commands.iter().enumerate() {
                         if menu == index as u8 {
                             sub1.attron(A_REVERSE);
@@ -390,16 +381,6 @@ pub mod sniffer {
                         sub1.mvprintw({index += 2; index as i32}, 2, command);
                     }
                     match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
-                        Some(Input::KeyMouse) => {
-                            if let Ok(mouse_event) = getmouse() {
-                                match mouse_event.y {
-                                    2 if mouse_event.x >= 2 && mouse_event.x < 8 => {running = 0u8; menu=0},
-                                    3 if mouse_event.x >= 3 && mouse_event.x < 9 => {running = 1u8; menu=1},
-                                    4 if mouse_event.x >= 3 && mouse_event.x < 7 => {running = 2u8; menu=2},
-                                    _ => (),
-                                }
-                            }
-                        }
                         Some(Input::KeyUp) => {
                             if menu != 0 {
                                 menu -= 1;
@@ -447,11 +428,11 @@ pub mod sniffer {
                 if !self.jh.is_finished() {
                     let mut cmd = String::new();
                     stdin().read_line(&mut cmd).unwrap();
-                    if cmd.chars().nth(0).unwrap() == 'P' {
+                    if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'p' {
                         self.pause();
-                    } else if cmd.chars().nth(0).unwrap() == 'R' {
+                    } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'r' {
                         self.resume();
-                    } else if cmd.chars().nth(0).unwrap() == 'Q'{
+                    } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'q'{
                         self.stop();
                         break;
                     } else {
