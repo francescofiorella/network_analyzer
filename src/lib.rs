@@ -9,26 +9,29 @@ pub mod sniffer {
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_BLINK, A_REVERSE, ALL_MOUSE_EVENTS, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, getmouse, init_pair, initscr, Input, mousemask, newwin, noecho, resize_term, start_color, Window};
     use rustc_serialize::hex::ToHex;
-    use crate::sniffer::format::get_file_name;
+    use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
     const RUN: &str = "****** SNIFFING PACKETS... ******";
     const PAUSE: &str = "****** SNIFFING PAUSED ******";
     const QUIT: &str = "****** SNIFFING CONCLUDED ******";
 
-
     fn tui_init(adapter: &str, filter: &str, output: &str, update_time: u64) -> Window {
         //screen initialization
-        let mut window = initscr();
+        let window = initscr();
         start_color();
-        init_pair(1,COLOR_WHITE,COLOR_BLACK);
-        init_pair(2,COLOR_YELLOW,COLOR_BLACK);
-        init_pair(3,COLOR_RED,COLOR_BLACK);
-        init_pair(4,COLOR_GREEN,COLOR_BLACK);
-        init_pair(5,COLOR_BLUE,COLOR_BLACK);
+        init_pair(1, COLOR_WHITE, COLOR_BLACK);
+        init_pair(2, COLOR_YELLOW, COLOR_BLACK);
+        init_pair(3, COLOR_RED, COLOR_BLACK);
+        init_pair(4, COLOR_GREEN, COLOR_BLACK);
+        init_pair(5, COLOR_BLUE, COLOR_BLACK);
 
         //screen settings
-        resize_term(0, 0);
+        if cfg!(target_os = "macos") {
+            resize_term(0, 0);
+        } else {
+            resize_term(42, 80);
+        }
         noecho();
         curs_set(0);
         window.keypad(true);
@@ -36,7 +39,7 @@ pub mod sniffer {
 
         //subwindow 2
         let sub2 = window.subwin(6, 67, 0, 12).unwrap();
-        sub2.draw_box(0,0);
+        sub2.draw_box(0, 0);
         sub2.attron(COLOR_PAIR(4));
         sub2.mvprintw(1, 1, "Adapter: ");
         sub2.mvprintw(1, 9, adapter);
@@ -51,7 +54,7 @@ pub mod sniffer {
 
         //subwindow 3
         let sub3 = newwin(33, 78, 9, 1);
-        sub3.draw_box(0,0);
+        sub3.draw_box(0, 0);
         sub3.refresh();
 
         window
@@ -66,7 +69,6 @@ pub mod sniffer {
     }
 
     fn notui_show_commands() {
-
         let commands = "\
         ****** Commands ******\n\
         Press \"P + Enter\" to pause\n\
@@ -81,7 +83,6 @@ pub mod sniffer {
     }
 
     fn print_state(state_window: Option<&Window>, state: &NAState) {
-
         let msg = match state {
             PAUSED => PAUSE,
             STOPPED => QUIT,
@@ -104,7 +105,7 @@ pub mod sniffer {
     enum NAState {
         RESUMED,
         PAUSED,
-        STOPPED
+        STOPPED,
     }
 
     impl NAState {
@@ -120,10 +121,9 @@ pub mod sniffer {
     }
 
     pub struct Sniffer {
-        m: Arc<Mutex<(NAState, Vec<NAPacket>, [Vec<Stats>; 4])>>,
+        m: Arc<Mutex<(NAState, Vec<NAPacket>, Vec<Stats>)>>,
         pub jh: JoinHandle<()>,
         cv: Arc<Condvar>,
-        device: Device,
         report_file_name: String,
         tui_handler: (Option<Window>, bool, Option<Window>),
     }
@@ -164,55 +164,37 @@ pub mod sniffer {
                 }
             }
 
-            let device_cl = device.clone();
-            let device_cl_2 = device.clone();
-
-            let device_ipv4_address = device.addresses[0].addr.to_string();
-            let device_ipv6_address = device.addresses[1].addr.to_string();
-            let incoming_ipv4_stats = vec![
-                Stats::new(device_ipv4_address.clone()),
-            ];
-            let incoming_ipv6_stats = vec![
-                Stats::new(device_ipv6_address.clone()),
-            ];
-            let outgoing_ipv4_stats = vec![
-                Stats::new(device_ipv4_address),
-            ];
-            let outgoing_ipv6_stats = vec![
-                Stats::new(device_ipv6_address),
-            ];
-            let stats = [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats];
+            let stats_vec = Vec::<Stats>::new();
 
             let vec = Vec::new();
 
-            let m = Arc::new(Mutex::new((RESUMED, vec, stats)));
+            let m = Arc::new(Mutex::new((RESUMED, vec, stats_vec)));
             let m_cl = m.clone();
             let m_cl_2 = m.clone();
             let cv = Arc::new(Condvar::new());
             let cv_cl = cv.clone();
             let cv_cl_2 = cv.clone();
 
-            // timeout thread
+            // report update thread (timer)
             spawn(move || {
                 loop {
                     sleep(Duration::from_millis(update_time));
                     let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
-                            mg.2 = produce_report(report_file_name_cl_2.clone(), device_cl_2.clone(), mg.1.clone(), mg.2.clone());
+                            mg.2 = produce_report(report_file_name_cl_2.clone(), mg.1.clone(), mg.2.clone());
                             mg.1 = Vec::new();
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
                             mg = cv_cl_2.wait_while(mg, |mg| !mg.0.is_resumed()).unwrap();
-                            continue
-                        },
+                            continue;
+                        }
                         _ => break
                     }
                 }
             });
 
             let jh = spawn(move || {
-
                 let mut sub4 = None;
 
                 //subwindow 4
@@ -222,7 +204,7 @@ pub mod sniffer {
                     sub4.as_ref().unwrap().setscrreg(0, 30);
                 }
 
-                let mut cap = Capture::from_device(device_cl.clone())
+                let mut cap = Capture::from_device(device.clone())
                     .unwrap()
                     .timeout(10000)
                     .promisc(true)
@@ -241,7 +223,7 @@ pub mod sniffer {
                                 if mg.0.is_paused() {
                                     drop(cap);
                                     mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
-                                    cap = Capture::from_device(device_cl.clone())
+                                    cap = Capture::from_device(device.clone())
                                         .unwrap()
                                         .timeout(10000)
                                         .promisc(true)
@@ -266,37 +248,37 @@ pub mod sniffer {
                                 // end of the filter check
                             }
                             Err(e) => {
-                               match tui {
-                                   true => {
-                                       sub4.as_ref().unwrap().clear();
-                                       sub4.as_ref().unwrap().printw(e.to_string().as_str());
-                                       sub4.as_ref().unwrap().printw("\n");
-                                       sub4.as_ref().unwrap().printw("Press any key to quit");
-                                       sub4.as_ref().unwrap().refresh();
-                                       //to make the error visible
-                                       sleep(Duration::from_secs(2));
-                                   },
-                                   false => println!("ERROR: {}", e),
-                               }
+                                match tui {
+                                    true => {
+                                        sub4.as_ref().unwrap().clear();
+                                        sub4.as_ref().unwrap().printw(e.to_string().as_str());
+                                        sub4.as_ref().unwrap().printw("\n");
+                                        sub4.as_ref().unwrap().printw("Press any key to quit");
+                                        sub4.as_ref().unwrap().refresh();
+                                        //to make the error visible
+                                        sleep(Duration::from_secs(2));
+                                    }
+                                    false => println!("ERROR: {}", e),
+                                }
                                 break;
                             }
                         }
                     } else if mg.0.is_paused() {
                         drop(cap);
                         mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
-                        cap = Capture::from_device(device_cl.clone())
+                        cap = Capture::from_device(device.clone())
                             .unwrap()
                             .timeout(10000)
                             .promisc(true)
                             .open()
                             .unwrap();
                     } else {
-                        break
+                        break;
                     }
                 }
 
                 let mut mg = m_cl.lock().unwrap();
-                mg.2 = produce_report(report_file_name_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
+                mg.2 = produce_report(report_file_name_cl.clone(), mg.1.clone(), mg.2.clone());
 
                 // change the mutex, just in case of internal error
                 mg.0 = STOPPED;
@@ -305,7 +287,7 @@ pub mod sniffer {
                 println!("Sniffing thread exiting");
             });
 
-            Ok(Sniffer { m, jh, cv, device, report_file_name, tui_handler })
+            Ok(Sniffer { m, jh, cv, report_file_name, tui_handler })
         }
 
         pub fn pause(&self) {
@@ -314,7 +296,7 @@ pub mod sniffer {
 
             print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
-            mg.2 = produce_report(self.report_file_name.clone(), self.device.clone(), mg.1.clone(), mg.2.clone());
+            mg.2 = produce_report(self.report_file_name.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
         }
 
@@ -334,7 +316,6 @@ pub mod sniffer {
             print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
             self.cv.notify_all();
-
         }
 
         pub fn enable_commands(&self) {
@@ -354,8 +335,8 @@ pub mod sniffer {
 
             //drawing subwindow 1
             let sub1 = self.tui_handler.0.as_ref().unwrap().subwin(6, 11, 0, 1).unwrap();
-            sub1.draw_box(0,0);
-            sub1.mvprintw(1,2, "Command");
+            sub1.draw_box(0, 0);
+            sub1.mvprintw(1, 2, "Command");
             sub1.keypad(true);
             sub1.refresh();
 
@@ -368,7 +349,7 @@ pub mod sniffer {
 
             //Event loop
             let mut menu = 0u8;
-            let mut running= 0u8;
+            let mut running = 0u8;
 
             loop {
                 if !self.m.lock().unwrap().0.is_stopped() {
@@ -378,7 +359,10 @@ pub mod sniffer {
                         } else {
                             sub1.attroff(A_REVERSE);
                         }
-                        sub1.mvprintw({index += 2; index as i32}, 2, command);
+                        sub1.mvprintw({
+                                          index += 2;
+                                          index as i32
+                                      }, 2, command);
                     }
                     match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
                         Some(Input::KeyUp) => {
@@ -386,22 +370,22 @@ pub mod sniffer {
                                 menu -= 1;
                                 continue;
                             }
-                        },
+                        }
                         Some(Input::KeyDown) =>
                             {
                                 if menu != 2 {
                                     menu += 1;
                                     continue;
                                 }
-                            },
+                            }
 
                         Some(Input::KeyRight) => {
                             running = menu
-                        },
+                        }
 
                         Some(Input::Character('\n')) => {
                             running = menu
-                        },
+                        }
 
                         Some(_) => continue,
 
@@ -432,7 +416,7 @@ pub mod sniffer {
                         self.pause();
                     } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'r' {
                         self.resume();
-                    } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'q'{
+                    } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'q' {
                         self.stop();
                         break;
                     } else {
@@ -447,26 +431,31 @@ pub mod sniffer {
     }
 
 
-
     #[derive(Debug, Clone)]
     struct NAPacket {
         //level 2 header
-        destination_mac_address: String, // 0 - 5
+        destination_mac_address: String,
+        // 0 - 5
         source_mac_address: String, // 6 - 11
 
         //level 3 header
-        level_three_type: String, // 12 - 13
-        total_length: u32, // 16 - 17
-        source_address: String, // 26 - 29
+        level_three_type: String,
+        // 12 - 13
+        total_length: u32,
+        // 16 - 17
+        source_address: String,
+        // 26 - 29
         destination_address: String, // 30 - 33
 
         //level 4 header
-        level_four_protocol: String, // 23
-        source_port: u16, // 34 - 35
-        destination_port: u16, // 36 - 37
+        level_four_protocol: String,
+        // 23
+        source_port: Option<u16>,
+        // 34 - 35
+        destination_port: Option<u16>, // 36 - 37
 
         timestamp: u128,
-        other: String
+        other: String,
     }
 
     fn to_mac_address(p: &Packet, start: usize, end: usize) -> String {
@@ -492,26 +481,26 @@ pub mod sniffer {
         s
     }
 
-    fn to_ipv6_address(p: &Packet, start: usize, end: usize)-> String{
+    fn to_ipv6_address(p: &Packet, start: usize, end: usize) -> String {
         let mut s = String::new();
         let mut count = 0;
-        (start..end).for_each(|byte|{
-                if &p[byte].to_string() == "0" {
-                    count += 1;
-                }else{
-                    if count!=0{
-                        if count==1 {
-                            s.push_str("0:");
-                        }else{
-                            s.push_str(":");
-                        }
-                        count = 0;
-                    }
-                    s.push_str(&[p[byte]].to_hex());
-                    if byte!= end {
+        (start..end).for_each(|byte| {
+            if &p[byte].to_string() == "0" {
+                count += 1;
+            } else {
+                if count != 0 {
+                    if count == 1 {
+                        s.push_str("0:");
+                    } else {
                         s.push_str(":");
                     }
+                    count = 0;
                 }
+                s.push_str(&[p[byte]].to_hex());
+                if byte != end {
+                    s.push_str(":");
+                }
+            }
         });
         s
     }
@@ -537,8 +526,8 @@ pub mod sniffer {
         }
     }
 
-    fn to_level_three_protocol(prot_num: u16)-> String{
-        match prot_num{
+    fn to_level_three_protocol(prot_num: u16) -> String {
+        match prot_num {
             2048 => "IPv4".to_string(), // 0x0800
             2054 => "ARP".to_string(), // 0x0806
             33024 => "IEEE 802.1Q".to_string(), // 0x8100
@@ -551,70 +540,71 @@ pub mod sniffer {
 
     impl NAPacket {
         fn new(pcap_packet: Packet) -> Self {
-            let mut eth_type = to_u16(&pcap_packet,12);
+            let eth_type = to_u16(&pcap_packet, 12);
             NAPacket {
                 destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
                 source_mac_address: to_mac_address(&pcap_packet, 6, 11),
 
-                level_three_type: to_level_three_protocol(to_u16(&pcap_packet,12)),
+                level_three_type: to_level_three_protocol(to_u16(&pcap_packet, 12)),
 
                 other: match eth_type {
-                    2054 => if pcap_packet[21] ==1 {"ARP Request".to_string()}else{"ARP Reply".to_string()}, // ARP, OpCode byte 21 = 1 Request, 2 Reply
+                    2054 => if pcap_packet[21] == 1 { "ARP Request".to_string() } else { "ARP Reply".to_string() }, // ARP, OpCode byte 21 = 1 Request, 2 Reply
                     _ => " ".to_string()
                 },
 
                 source_address: match eth_type {
-                    2048 => to_ip_address(&pcap_packet, 26, 29) , //IPv4
+                    2048 => to_ip_address(&pcap_packet, 26, 29), //IPv4
                     2054 => to_ip_address(&pcap_packet, 28, 31), // ARP Sender IP
                     34525 => to_ipv6_address(&pcap_packet, 22, 37), //IPv6
                     _ => " ".to_string()
-                } ,
+                },
 
                 destination_address: match eth_type {
                     2048 => to_ip_address(&pcap_packet, 30, 33), //IPv4
                     2054 => to_ip_address(&pcap_packet, 38, 41), // ARP Target IP
                     34525 => to_ipv6_address(&pcap_packet, 38, 53), //IPv6
                     _ => " ".to_string()
-                } ,
+                },
 
                 total_length: pcap_packet.header.len,
 
-                level_four_protocol: match eth_type{
+                level_four_protocol: match eth_type {
                     2048 => to_level_four_protocol(pcap_packet[23]), //IPv4
-                    34525 => match pcap_packet[20]{ //IPv6 byte 20 is Next Header
-                        6 | 17 | 58 => to_level_four_protocol(pcap_packet[20]) , //IPv6 + TCP or IPv6 + UDP IPv6 + ICMPv6
+                    34525 => match pcap_packet[20] { //IPv6 byte 20 is Next Header
+                        6 | 17 | 58 => to_level_four_protocol(pcap_packet[20]), //IPv6 + TCP or IPv6 + UDP IPv6 + ICMPv6
                         _ => "".to_string()
-                    } ,
-                    _ => "".to_string()
-                } ,
-
-                source_port: match eth_type{
-                    2048 => match pcap_packet[23] { //IPV4
-                        6 | 17 => to_u16(&pcap_packet, 34), //IPV4 + TCP o IPV4+ UDP
-                        _ => 0 as u16 // 0 for IGMP, ICMP
                     },
-                    34525 => match pcap_packet[20]{ // IPv6
-                        6 | 17  => to_u16(&pcap_packet, 54), //IPV6 + TCP o UDP
-                        _ => 0 as u16
+                    _ => "".to_string()
+                },
+
+                source_port: match eth_type {
+                    2048 => match pcap_packet[23] { //IPV4
+                        6 | 17 => Some(to_u16(&pcap_packet, 34)), //IPV4 + TCP o IPV4+ UDP
+                        _ => None // 0 for IGMP, ICMP
+                    },
+                    34525 => match pcap_packet[20] { // IPv6
+                        6 | 17 => Some(to_u16(&pcap_packet, 54)), //IPV6 + TCP o UDP
+                        _ => None
                     }
-                    _ => 0 as u16
+                    _ => None
                 }
                 ,
-                destination_port:  match eth_type{
+                destination_port: match eth_type {
                     2048 => match pcap_packet[23] { //IPV4
-                        6 | 17 => to_u16(&pcap_packet, 36), //IPV4 + TCP o UDP
-                        _ => 0 as u16 // 0 for IGMP, ICMP
+                        6 | 17 => Some(to_u16(&pcap_packet, 36)), //IPV4 + TCP o UDP
+                        _ => None // 0 for IGMP, ICMP
                     },
-                    34525 => match pcap_packet[20]{ // IPv6
-                        6 | 17 => to_u16(&pcap_packet, 56), //IPV6 + TCP o UDP
-                        _ => 0 as u16
+                    34525 => match pcap_packet[20] { // IPv6
+                        6 | 17 => Some(to_u16(&pcap_packet, 56)), //IPV6 + TCP o UDP
+                        _ => None
                     }
-                    _ => 0 as u16
+                    _ => None
                 },
 
                 timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis(),
 
-            }}
+            }
+        }
 
         fn to_string_mac(&self) -> String {
             let mut s = String::new();
@@ -627,14 +617,14 @@ pub mod sniffer {
         fn to_string_source_socket(&self) -> String {
             let mut s = String::new();
             s.push_str(&*("IP_s: ".to_owned() + &self.source_address
-                + &*" Port_s: ".to_owned() + &self.source_port.to_string()));
+                + &*" Port_s: ".to_owned() + &option_to_string(self.source_port)));
             s
         }
 
         fn to_string_dest_socket(&self) -> String {
             let mut s = String::new();
             s.push_str(&*("IP_d: ".to_owned() + &self.destination_address
-                + &*" Port_d: ".to_owned() + &self.destination_port.to_string()));
+                + &*" Port_d: ".to_owned() + &option_to_string(self.destination_port)));
             s
         }
 
@@ -667,17 +657,15 @@ pub mod sniffer {
                 tui_window.as_ref().unwrap().refresh();
             } else {
                 let format =
-                        self.to_string_mac().as_str().to_owned() + "\n" +
+                    self.to_string_mac().as_str().to_owned() + "\n" +
                         self.to_string_source_socket().as_str() + "\n" +
                         self.to_string_dest_socket().as_str() + "\n" +
                         self.info().as_str() + "\n"
-                ;
+                    ;
                 println!("{}", format);
             }
         }
-
     }
-
 
 
     #[derive(Debug)]
@@ -716,186 +704,112 @@ pub mod sniffer {
 
     #[derive(Debug, Clone)]
     pub struct Stats {
-        ip_address: String,
-        port: u16,
-        transported_protocols: Vec<String>,
-        bytes_number: u128,
+        sockets: [(String, Option<u16>); 2],
+        l3_protocol: String,
+        total_bytes: u128,
         first_timestamp: u128,
         last_timestamp: u128,
     }
 
     impl Stats {
-        pub fn new(ip_address: String) -> Self {
+        pub fn new(sockets: [(String, Option<u16>); 2], l3_protocol: String) -> Self {
             Stats {
-                ip_address,
-                port: 0,
-                transported_protocols: Vec::new(),
-                bytes_number: 0,
+                sockets,
+                l3_protocol,
+                total_bytes: 0,
                 first_timestamp: 0,
                 last_timestamp: 0,
             }
         }
     }
 
-    fn produce_report(file_name: String, device: Device, packets: Vec<NAPacket>, old_stats: [Vec<Stats>; 4]) -> [Vec<Stats>; 4] {
-        fn produce_stats(old_stats: [Vec<Stats>; 4], device: Device, packets: Vec<NAPacket>) -> [Vec<Stats>; 4] {
-            fn update_stats(vec: &mut Vec<Stats>, packet: &NAPacket, packet_port: u16, device_address: String) {
-                let mut iter = vec.iter_mut();
-                loop {
-                    let item = iter.next();
-                    match item {
-                        // se è la prima volta che riempio il vettore
-                        Some(stats) if stats.port == 0 => {
-                            // aggiorna la porta
-                            stats.port = packet_port;
-                            // aggiungi il protocollo di livello 4
-                            stats.transported_protocols.push(packet.level_four_protocol.clone());
-                            // aggiorna il numero totale di bytes
-                            stats.bytes_number = packet.total_length as u128;
-                            // aggiorna il first timestamp
-                            stats.first_timestamp = packet.timestamp;
-                            // aggiorna il last timestamp
-                            stats.last_timestamp = packet.timestamp;
-                            break;
-                        }
-                        // se il vettore è già stato usato
-                        Some(stats) => {
-                            // controlla se la porta coincide
-                            if stats.port == packet_port {
-                                // queste sono le statistiche, aggiorna!
-                                // aggiungi il protocollo di livello 4, se non c'è
-                                if !stats.transported_protocols.contains(&packet.level_four_protocol) {
-                                    stats.transported_protocols.push(packet.level_four_protocol.clone());
-                                }
-                                // aggiorna il numero totale di bytes
-                                stats.bytes_number += packet.total_length as u128;
-                                // aggiorna il last timestamp
-                                stats.last_timestamp = packet.timestamp;
-                                break;
-                            } else {
-                                // statistiche non ancora trovate, continua a cercare!
-                                continue;
-                            }
-                        }
-                        // se la statistica non c'è
-                        None => {
-                            // aggiungi una stats
-                            let mut stats = Stats::new(device_address);
-                            // aggiorna la porta
-                            stats.port = packet_port;
-                            // aggiungi il protocollo di livello 4
-                            stats.transported_protocols.push(packet.level_four_protocol.clone());
-                            // aggiorna il numero totale di bytes
-                            stats.bytes_number = packet.total_length as u128;
-                            // aggiorna il first timestamp
-                            stats.first_timestamp = packet.timestamp;
-                            // aggiorna il last timestamp
-                            stats.last_timestamp = packet.timestamp;
-                            // aggiungi stats a vettore
-                            vec.push(stats);
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // network address/port pair
-            // protocols transported
-            // cumulated number of bytes transmitted
-            // timestamp of the first and last occurrence of information exchanged
-            // indirizzi del device
-            let device_ipv4_address = device.addresses[0].addr.to_string();
-            let device_ipv6_address = device.addresses[1].addr.to_string();
-
-            let mut incoming_ipv4_stats = old_stats[0].clone();
-            let mut incoming_ipv6_stats = old_stats[1].clone();
-            let mut outgoing_ipv4_stats = old_stats[2].clone();
-            let mut outgoing_ipv6_stats = old_stats[3].clone();
-
+    fn produce_report(file_name: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
+        fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
             for packet in packets {
-                // controlla il source address del pacchetto, poi il destination
-                match (&packet.source_address, &packet.destination_address) {
-                    // outgoing packet
-                    (it, _) if *it == device_ipv4_address => {
-                        // se è un outgoing ipv4 packet
-                        update_stats(&mut outgoing_ipv4_stats, &packet, packet.source_port, device_ipv4_address.clone());
+                // controlla il socket del pacchetto
+                if stats.is_empty() {
+                    let mut stat = Stats::new(
+                        [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
+                        packet.level_three_type,
+                    );
+                    stat.total_bytes = packet.total_length as u128;
+                    stat.first_timestamp = packet.timestamp;
+                    stat.last_timestamp = packet.timestamp;
+                    stats.push(stat);
+                } else {
+                    let first_socket = (packet.source_address, packet.source_port);
+                    let second_socket = (packet.destination_address, packet.destination_port);
+                    // check if the socket is contained in old_stats
+                    let mut modified = false;
+                    'inner: for stat in stats.iter_mut() {
+                        if stat.sockets.contains(&first_socket) && stat.sockets.contains(&second_socket) {
+                            stat.total_bytes += packet.total_length as u128;
+                            stat.last_timestamp = packet.timestamp;
+                            modified = true;
+                            break 'inner;
+                        }
                     }
-                    (it, _) if *it == device_ipv6_address => {
-                        // se è un outgoing ipv6 packet
-                        update_stats(&mut outgoing_ipv6_stats, &packet, packet.source_port, device_ipv6_address.clone());
-                    }
-                    // incoming packet
-                    (_, it) if *it == device_ipv4_address => {
-                        // se è un incoming ipv4 packet
-                        update_stats(&mut incoming_ipv4_stats, &packet, packet.destination_port, device_ipv4_address.clone());
-                    }
-                    (_, it) if *it == device_ipv6_address => {
-                        // se è un incoming ipv6 packet
-                        update_stats(&mut incoming_ipv6_stats, &packet, packet.destination_port, device_ipv6_address.clone());
-                    }
-                    _ => {
-                        //println!("Ignored packet! Protocol: {:?}, Source: {:?}, Destination: {:?}", packet.level_three_type, packet.source_address, packet.destination_address);
-                        // panic!("Should not be possible!");
-                        continue;
+                    if !modified {
+                        let mut stat = Stats::new(
+                            [first_socket.clone(), second_socket.clone()],
+                            packet.level_three_type.clone(),
+                        );
+                        stat.total_bytes = packet.total_length as u128;
+                        stat.first_timestamp = packet.timestamp;
+                        stat.last_timestamp = packet.timestamp;
+                        stats.push(stat);
                     }
                 }
             }
-            [incoming_ipv4_stats, incoming_ipv6_stats, outgoing_ipv4_stats, outgoing_ipv6_stats]
+            stats
         }
         // define the path
-        let vec = produce_stats(old_stats, device, packets);
+        let vec = produce_stats(stats, packets);
         // crea il file o tronca al byte 0 se il file esiste già
         let mut report = File::create(file_name.clone()).unwrap(); // returns a Result
         // scrivi le stringhe nel report
         writeln!(report, "Sniffer report")
             .expect("Unable to write the report file!");
         writeln!(report).expect("Unable to write the report file!");
-        for (i, stats_group) in vec.clone().iter().enumerate() {
+
+        if vec.is_empty() {
+            writeln!(report, "No traffic detected!")
+                .expect("Unable to write the report file!");
+            println!("Report produced!");
+            return vec;
+        }
+
+        for stat in vec.clone() {
             writeln!(report, "========================================================================")
                 .expect("Unable to write the report file!");
             writeln!(report).expect("Unable to write the report file!");
-            match i {
-                0 => writeln!(report, "Incoming IPv4 Stats"),
-                1 => writeln!(report, "Incoming IPv6 Stats"),
-                2 => writeln!(report, "Outgoing IPv4 Stats"),
-                3 => writeln!(report, "Outgoing IPv6 Stats"),
-                _ => panic!("Should not be possible!")
-            }.expect("Unable to write the report file!");
+
+            // SOCKET
+            // write the first ip address
+            writeln!(report, "First IP address: {}", stat.sockets[0].0)
+                .expect("Unable to write the report file!");
+            // write the first port
+            writeln!(report, "First Port: {}", option_to_string(stat.sockets[0].1))
+                .expect("Unable to write the report file!");
+            // write the second ip address
+            writeln!(report, "Second IP address: {}", stat.sockets[1].0)
+                .expect("Unable to write the report file!");
+            // write the second port
+            writeln!(report, "Second Port: {}", option_to_string(stat.sockets[1].1))
+                .expect("Unable to write the report file!");
+            // write the list of transported protocols
+            writeln!(report, "Level three protocol: {}", stat.l3_protocol)
+                .expect("Unable to write the report file!");
+            // write the total number of bytes
+            writeln!(report, "Cumulated number of bytes transmitted: {}", stat.total_bytes)
+                .expect("Unable to write the report file!");
+            // write the first timestamp
+            writeln!(report, "Timestamp of the first occurrence of information exchanged: {}", stat.first_timestamp)
+                .expect("Unable to write the report file!");
+            // write the last timestamp
+            writeln!(report, "Timestamp of the last occurrence of information exchanged: {}", stat.last_timestamp)
+                .expect("Unable to write the report file!");
             writeln!(report).expect("Unable to write the report file!");
-            // for each stats_group write the stats
-            'inner: for stats in stats_group {
-                // se port == 0, ignora
-                if stats.port == 0 {
-                    writeln!(report, "There is no traffic!")
-                        .expect("Unable to write the report file!");
-                    writeln!(report).expect("Unable to write the report file!");
-                    break 'inner;
-                }
-                // write the ip address
-                writeln!(report, "Ip address: {}", stats.ip_address)
-                    .expect("Unable to write the report file!");
-                // write the port
-                writeln!(report, "Port: {}", stats.port)
-                    .expect("Unable to write the report file!");
-                // write the list of transported protocols
-                writeln!(report, "Transported protocols: {}", stats.transported_protocols.iter().fold(
-                    String::new(), |mut acc, prot| {
-                        acc.push_str(prot.as_str());
-                        acc.push_str(", ");
-                        acc
-                    })
-                ).expect("Unable to write the report file!");
-                // write the total number of bytes
-                writeln!(report, "Cumulated number of bytes transmitted: {}", stats.bytes_number)
-                    .expect("Unable to write the report file!");
-                // write the first timestamp
-                writeln!(report, "Timestamp of the first occurrence of information exchanged: {}", stats.first_timestamp)
-                    .expect("Unable to write the report file!");
-                // write the last timestamp
-                writeln!(report, "Timestamp of the last occurrence of information exchanged: {}", stats.last_timestamp)
-                    .expect("Unable to write the report file!");
-                writeln!(report).expect("Unable to write the report file!");
-            }
         }
         println!("Report produced!");
         vec
@@ -908,6 +822,13 @@ pub mod sniffer {
                 string.push_str(".txt");
             }
             string
+        }
+
+        pub fn option_to_string(opt: Option<u16>) -> String {
+            match opt {
+                Some(num) => num.to_string(),
+                None => String::from("None")
+            }
         }
     }
 }
