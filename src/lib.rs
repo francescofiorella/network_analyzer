@@ -28,7 +28,12 @@ pub mod sniffer {
         init_pair(5,COLOR_BLUE,COLOR_BLACK);
 
         //screen settings
-        resize_term(0, 0);
+        if cfg!(target_os = "macos") {
+            resize_term(0, 0);
+        } else {
+            resize_term(42,80);
+        }
+
         noecho();
         curs_set(0);
         window.keypad(true);
@@ -134,17 +139,9 @@ pub mod sniffer {
             let report_file_name_cl = report_file_name.clone();
             let report_file_name_cl_2 = report_file_name.clone();
 
-            //Solo per debug: stampo i vari devices
-            let d = Device::list().unwrap();
-            for (i, device) in d.iter().enumerate() {
-                print!("Device {} | ", i);
-                for addr in &device.addresses {
-                    print!("{:?} | ", addr.addr);
-                }
-                println!()
-            }
 
-            let device = match d.into_iter().find(|d| d.name == adapter) {
+            let device_list = Device::list().unwrap();
+            let device = match device_list.into_iter().find(|d| d.name == adapter) {
                 Some(dev) => dev,
                 None => return Err(NAError::new("Device not found")),
             };
@@ -642,7 +639,7 @@ pub mod sniffer {
             let mut s = String::new();
             s.push_str(&*("L3_type: ".to_owned() + &self.level_three_type.to_string()
                 + &*" Len: ".to_owned() + &self.total_length.to_string()
-                + &*" L4_Prot ".to_owned() + &self.level_four_protocol
+                + &*" L4_Prot: ".to_owned() + &self.level_four_protocol
                 + &*" TS: ".to_owned() + &self.timestamp.to_string()));
             s
         }
