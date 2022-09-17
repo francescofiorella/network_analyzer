@@ -16,6 +16,7 @@ pub mod sniffer {
     const PAUSE: &str = "****** SNIFFING PAUSED ******";
     const QUIT: &str = "****** SNIFFING CONCLUDED ******";
 
+
     fn tui_init(adapter: &str, filter: &str, output: &str, update_time: u64) -> Window {
         //screen initialization
         let window = initscr();
@@ -134,17 +135,9 @@ pub mod sniffer {
             let report_file_name_cl = report_file_name.clone();
             let report_file_name_cl_2 = report_file_name.clone();
 
-            //Solo per debug: stampo i vari devices
-            let d = Device::list().unwrap();
-            for (i, device) in d.iter().enumerate() {
-                print!("Device {} | ", i);
-                for addr in &device.addresses {
-                    print!("{:?} | ", addr.addr);
-                }
-                println!()
-            }
 
-            let device = match d.into_iter().find(|d| d.name == adapter) {
+            let device_list = Device::list().unwrap();
+            let device = match device_list.into_iter().find(|d| d.name == adapter) {
                 Some(dev) => dev,
                 None => return Err(NAError::new("Device not found")),
             };
@@ -434,24 +427,18 @@ pub mod sniffer {
     #[derive(Debug, Clone)]
     struct NAPacket {
         //level 2 header
-        destination_mac_address: String,
-        // 0 - 5
+        destination_mac_address: String, // 0 - 5
         source_mac_address: String, // 6 - 11
 
         //level 3 header
-        level_three_type: String,
-        // 12 - 13
-        total_length: u32,
-        // 16 - 17
-        source_address: String,
-        // 26 - 29
+        level_three_type: String, // 12 - 13
+        total_length: u32, // 16 - 17
+        source_address: String, // 26 - 29
         destination_address: String, // 30 - 33
 
         //level 4 header
-        level_four_protocol: String,
-        // 23
-        source_port: Option<u16>,
-        // 34 - 35
+        level_four_protocol: String, // 23
+        source_port: Option<u16>, // 34 - 35
         destination_port: Option<u16>, // 36 - 37
 
         timestamp: u128,
@@ -632,7 +619,7 @@ pub mod sniffer {
             let mut s = String::new();
             s.push_str(&*("L3_type: ".to_owned() + &self.level_three_type.to_string()
                 + &*" Len: ".to_owned() + &self.total_length.to_string()
-                + &*" L4_Prot ".to_owned() + &self.level_four_protocol
+                + &*" L4_Prot: ".to_owned() + &self.level_four_protocol
                 + &*" TS: ".to_owned() + &self.timestamp.to_string()));
             s
         }
