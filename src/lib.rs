@@ -1,6 +1,3 @@
-use std::fs::File;
-use pcap::Device;
-
 pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
@@ -20,7 +17,7 @@ pub mod sniffer {
     const QUIT: &str = "****** SNIFFING CONCLUDED ******";
 
 
-    fn tui_init(adapter: &str, filter: &str, output: &str, update_time: i32) -> Window {
+    fn tui_init(adapter: &str, filter: &str, output: &str, update_time: u64) -> Window {
         //screen initialization
         let mut window = initscr();
         start_color();
@@ -136,7 +133,7 @@ pub mod sniffer {
 
     impl Sniffer {
         pub fn new(adapter: String, output: String, update_time: u64, filter: String, tui: bool) -> Result<Self, NAError> {
-            let report_file_name = get_file_name(output);
+            let report_file_name = get_file_name(output.clone());
             let report_file_name_cl = report_file_name.clone();
             let report_file_name_cl_2 = report_file_name.clone();
 
@@ -572,7 +569,7 @@ pub mod sniffer {
 
 
     impl NAPacket {
-        fn new(pcap_packet: Packet, timestamp: u128) -> Self {
+        fn new(pcap_packet: Packet) -> Self {
             let mut eth_type = to_u16(&pcap_packet,12);
             NAPacket {
                 destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
