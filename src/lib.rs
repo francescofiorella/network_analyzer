@@ -2,7 +2,7 @@ pub mod sniffer {
     use std::error::Error;
     use std::fmt::{Display, Formatter};
     use std::fs::File;
-    use std::io::Write;
+    use std::io::{stdin, Write};
     use pcap::{Capture, Device, Packet};
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
@@ -11,12 +11,17 @@ pub mod sniffer {
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
-    pub fn tui_init(adapter: &str, filter: &str, output: &str) -> Window {
+    const RUN: &str = "****** SNIFFING PACKETS... ******";
+    const PAUSE: &str = "****** SNIFFING PAUSED ******";
+    const QUIT: &str = "****** SNIFFING CONCLUDED ******";
+
+
+    fn tui_init(adapter: &str, filter: &str, output: &str, update_time: i32) -> Window {
         //screen initialization
         let mut window = initscr();
 
         //screen settings
-        resize_term(38, 80);
+        resize_term(42, 80);
         noecho();
         curs_set(0);
         window.keypad(true);
@@ -24,7 +29,7 @@ pub mod sniffer {
         window.refresh();
 
         //subwindow 2
-        let sub2 = window.subwin(5, 67, 0, 12).unwrap();
+        let sub2 = window.subwin(6, 67, 0, 12).unwrap();
         sub2.draw_box(0,0);
         sub2.mvprintw(1, 1, "Adapter: ");
         sub2.mvprintw(1, 9, adapter);
@@ -32,17 +37,62 @@ pub mod sniffer {
         sub2.mvprintw(2, 9, filter);
         sub2.mvprintw(3, 1, "Output file: ");
         sub2.mvprintw(3, 14, output);
+        sub2.mvprintw(4, 1, "Output upd. time (ms): ");
+        sub2.mvprintw(4, 24, update_time.to_string().as_str());
         sub2.refresh();
 
         //subwindow 3
-        let sub3 = newwin(33, 78, 5, 1);
+        let sub3 = newwin(33, 78, 9, 1);
         sub3.draw_box(0,0);
         sub3.refresh();
 
         window
     }
 
-    #[derive(Debug)]
+    fn state_win_init() -> Window {
+        let state_window = newwin(3, 78, 6, 1);
+        state_window.draw_box(0, 0);
+        state_window.mvprintw(1, 22, RUN);
+        state_window.refresh();
+        state_window
+    }
+
+    fn notui_show_commands() {
+
+        let commands = "\
+        ****** Commands ******\n\
+        Press \"P\" to pause\n\
+        Press \"R\" to resume\n\
+        Press \"Q\" to quit \n\
+        **********************\n\
+        Starting sniffing...";
+
+        println!("{}", commands);
+
+        sleep(Duration::from_secs(3));
+    }
+
+    fn print_state(state_window: Option<&Window>, state: &NAState) {
+
+        let msg = match state {
+            PAUSED => PAUSE,
+            STOPPED => QUIT,
+            RESUMED => RUN,
+        };
+
+        match state_window {
+            Some(sw) => {
+                sw.clear();
+                sw.draw_box(0, 0);
+                sw.mvprintw(1, 22, msg);
+                sw.refresh();
+            }
+
+            None => println!("{}", msg),
+        }
+    }
+
+    #[derive(Debug, Clone)]
     enum NAState {
         RESUMED,
         PAUSED,
@@ -67,7 +117,7 @@ pub mod sniffer {
         cv: Arc<Condvar>,
         device: Device,
         report_file_name: String,
-        tui_handler: Arc<(Option<Window>, Arc<Mutex<bool>>, bool)>,
+        tui_handler: (Option<Window>, Arc<Mutex<bool>>, bool, Option<Window>),
     }
 
     impl Sniffer {
@@ -97,14 +147,20 @@ pub mod sniffer {
 
 
             let mut event_listener = Arc::new(Mutex::new(tui));
-            let mut event_listener_cl = event_listener.clone();
             let mut main_window = None;
-            let mut tui_handler = Arc::new((main_window, event_listener.clone(), false));
-            let mut tui_handler_cl = tui_handler.clone();
+            let mut state_window = None;
+            let mut tui_handler = (main_window, event_listener.clone(), false, state_window);
+            let mut event_listener_cl = event_listener.clone();
 
-            if tui {
-                main_window = Some(tui_init(&adapter, &filter, &output));
-                tui_handler = Arc::new((main_window, event_listener, true));
+            match tui {
+                true => {
+                    main_window = Some(tui_init(&adapter, &filter, &output, update_time));
+                    state_window = Some(state_win_init());
+                    tui_handler = (main_window, event_listener, true, state_window);
+                }
+                false => {
+                    notui_show_commands();
+                }
             }
 
             let vec = Vec::new();
@@ -155,80 +211,73 @@ pub mod sniffer {
                 }
             });
 
-                let jh = spawn(move || {
+            let jh = spawn(move || {
 
-                    let mut sub4 = None;
+                let mut sub4 = None;
 
-                    //subwindow 4
-                    if tui {
-                        sub4 = Some(newwin(31, 76, 6, 2));
-                        sub4.as_ref().unwrap().scrollok(true);
-                        sub4.as_ref().unwrap().setscrreg(6, 30);
-                    }
+                //subwindow 4
+                if tui {
+                    sub4 = Some(newwin(31, 76, 10, 2));
+                    sub4.as_ref().unwrap().scrollok(true);
+                    sub4.as_ref().unwrap().setscrreg(7, 30);
+                }
 
-                    println!("****** SNIFFING STARTED ******");
-                    loop {
-                        let mut mg = m_cl.lock().unwrap();
-                        if mg.0.is_resumed() {
-                            // rilascia il lock prima di next_packet() (bloccante)
-                            drop(mg);
-                            match cap.next_packet() {
-                                Ok(packet) => {
-                                    mg = m_cl.lock().unwrap();
-                                    if mg.0.is_paused() {
-                                        continue;
-                                    } else if mg.0.is_stopped() {
-                                        break;
-                                    }
-
-                                    let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-                                    let p = NAPacket::new(packet.clone(), timestamp);
-
-                                    if tui {
-                                        sub4.as_ref().unwrap().printw(&p.to_string_mac());
-                                        sub4.as_ref().unwrap().printw("\n");
-                                        sub4.as_ref().unwrap().printw(&p.to_string_source_socket());
-                                        sub4.as_ref().unwrap().printw("\n");
-                                        sub4.as_ref().unwrap().printw(&p.to_string_dest_socket());
-                                        sub4.as_ref().unwrap().printw("\n");
-                                        sub4.as_ref().unwrap().printw(&p.info());
-                                        sub4.as_ref().unwrap().printw("\n");
-                                        sub4.as_ref().unwrap().printw("\n");
-                                        sub4.as_ref().unwrap().refresh();
-                                    } else {
-                                        //METTERE COMANDI CON SLEEP E AVVISO DELLA SLEEP
-                                        println!("{:?}", p);
-                                        //FARE EVENT_HANDLER PER QUANDO PREMI P / R / STOP NORMALMENTE SENZA TUI
-                                    }
-
-                                    mg.1.push(p);
-                                }
-                                Err(e) => {
-                                    //IF NOT TUI
-                                    println!("ERROR: {}", e);
+                loop {
+                    let mut mg = m_cl.lock().unwrap();
+                    if mg.0.is_resumed() {
+                        // rilascia il lock prima di next_packet() (bloccante)
+                        drop(mg);
+                        match cap.next_packet() {
+                            Ok(packet) => {
+                                mg = m_cl.lock().unwrap();
+                                if mg.0.is_paused() {
+                                    continue;
+                                } else if mg.0.is_stopped() {
                                     break;
                                 }
+
+                                let timestamp = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+                                let p = NAPacket::new(packet.clone(), timestamp);
+
+                                match tui {
+                                    true => p.print_packet(sub4.as_ref()),
+                                    false => p.print_packet(None),
+                                }
+
+                                mg.1.push(p);
                             }
-                        } else if mg.0.is_paused() {
-                            mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
-                        } else {
-                            break
+                            Err(e) => {
+                               match tui {
+                                   true => {
+                                       sub4.as_ref().unwrap().clear();
+                                       sub4.as_ref().unwrap().printw(e.to_string().as_str());
+                                       //to make the error visible
+                                       sleep(Duration::from_secs(2));
+                                   },
+                                   false => println!("ERROR: {}", e),
+                               }
+                                break;
+                            }
                         }
+                    } else if mg.0.is_paused() {
+                        mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
+                    } else {
+                        break
                     }
+                }
 
-                    let mut mg = m_cl.lock().unwrap();
-                    mg.2 = produce_report(output_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
+                let mut mg = m_cl.lock().unwrap();
+                mg.2 = produce_report(output_cl.clone(), device_cl.clone(), mg.1.clone(), mg.2.clone());
 
-                    // change the mutex, just in case
-                    mg.0 = STOPPED;
-                    cv_cl.notify_all();
-
-                    if tui {
-                        *event_listener_cl.lock().unwrap() = false;
-                    }
-
-                    println!("****** SNIFFING TERMINATED ******");
-                });
+                // change the mutex, just in case of internal error
+                mg.0 = STOPPED;
+                cv_cl.notify_all();
+                // blocks the TUI event handler in case of internal error
+                if tui {
+                    *event_listener_cl.lock().unwrap() = false;
+                }
+                println!("Sniffing thread exiting");
+            });
 
             Ok(Sniffer { m, jh, cv, device, report_file_name: output, tui_handler })
         }
@@ -237,7 +286,7 @@ pub mod sniffer {
             let mut mg = self.m.lock().unwrap();
             mg.0 = PAUSED;
 
-            println!("****** SNIFFING PAUSED ******");
+            print_state(self.tui_handler.3.as_ref(), &(mg.0));
 
             mg.2 = produce_report(self.report_file_name.clone(), self.device.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
@@ -246,13 +295,18 @@ pub mod sniffer {
         pub fn resume(&self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = RESUMED;
+
+            print_state(self.tui_handler.3.as_ref(), &(mg.0));
+
             self.cv.notify_all();
-            println!("****** SNIFFING RESUMED ******");
         }
 
         pub fn stop(&self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = STOPPED;
+
+            print_state(self.tui_handler.3.as_ref(), &(mg.0));
+
             self.cv.notify_all();
 
             if self.tui_handler.2 {
@@ -261,89 +315,119 @@ pub mod sniffer {
             }
         }
 
-        pub fn event_handler(&self) {
+        pub fn enable_commands(&self) {
+            match self.tui_handler.2 {
+                true => {
+                    self.tui_event_handler(); //blocking function until stop
+                }
+                false => {
+                    self.notui_event_handler(); //blocking function until stop
+                }
+            }
 
+            println!("Closing event handler loop");
+        }
+
+        fn tui_event_handler(&self) {
+
+            //drawing subwindow 1
+            let sub1 = self.tui_handler.0.as_ref().unwrap().subwin(6, 11, 0, 1).unwrap();
+            sub1.draw_box(0,0);
+            sub1.mvprintw(1,2, "Command");
+            sub1.keypad(true);
+            sub1.refresh();
+
+            //commands definition
             let commands = vec![
                 "PAUSE",
                 "RESUME",
+                "QUIT",
             ];
 
             //Event loop
-            let mut menu = 0;
-            let mut running = true;
+            let mut menu = 0u8;
+            let mut running= 0u8;
 
-
-                //subwindow 1
-                let sub1 = self.tui_handler.0.as_ref().unwrap().subwin(5, 11, 0, 1).unwrap();
-                sub1.draw_box(0,0);
-                sub1.mvprintw(1,2, "Command");
-                sub1.keypad(true);
-                sub1.refresh();
-
-                loop {
-                    if *self.tui_handler.1.lock().unwrap() {
-                        for (index, command) in commands.iter().enumerate() {
-                            if menu == index {
-                                sub1.attron(A_BLINK);
-                            } else {
-                                sub1.attroff(A_BLINK);
-                            }
-                            if index == 0 {
-                                sub1.mvprintw(2, 2, command);
-                            } else {
-                                sub1.mvprintw(3, 2, command);
-                            }
+            loop {
+                if *self.tui_handler.1.lock().unwrap() {
+                    for (mut index, command) in commands.iter().enumerate() {
+                        if menu == index as u8 {
+                            sub1.attron(A_BLINK);
+                        } else {
+                            sub1.attroff(A_BLINK);
                         }
-                        match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
-                            Some(Input::KeyMouse) => {
-                                if let Ok(mouse_event) = getmouse() {
-                                    if (mouse_event.y == 2) {
-                                        if (mouse_event.x >= 2 && mouse_event.x < 8) {
-                                            running = false;
-                                        }
-                                    }
-
-                                    if (mouse_event.y == 3) {
-                                        if (mouse_event.x >= 3 && mouse_event.x < 9) {
-                                            running = true
-                                        }
-                                    }
+                        sub1.mvprintw({index += 2; index as i32}, 2, command);
+                    }
+                    match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
+                        Some(Input::KeyMouse) => {
+                            if let Ok(mouse_event) = getmouse() {
+                                match mouse_event.y {
+                                    2 if mouse_event.x >= 2 && mouse_event.x < 8 => running = 0u8,
+                                    3 if mouse_event.x >= 3 && mouse_event.x < 9 => running = 1u8,
+                                    4 if mouse_event.x >= 3 && mouse_event.x < 7 => running = 2u8,
+                                    _ => (),
                                 }
                             }
-                            Some(Input::KeyUp) => {
-                                if menu != 0 {
-                                    menu -= 1;
+                        }
+                        Some(Input::KeyUp) => {
+                            if menu != 0 {
+                                menu -= 1;
+                                continue;
+                            }
+                        },
+                        Some(Input::KeyDown) =>
+                            {
+                                if menu != 2 {
+                                    menu += 1;
                                     continue;
                                 }
                             },
-                            Some(Input::KeyDown) =>
-                                {
-                                    if menu != 1 {
-                                        menu += 1;
-                                        continue;
-                                    }
-                                },
 
-                            Some(Input::KeyRight) => {
-                                running = if menu == 0 { false } else { true }
-                            },
+                        Some(Input::KeyRight) => {
+                            running = menu
+                        },
 
-                            Some(_) => continue,
+                        Some(_) => continue,
 
-                            None => (),
-                        }
+                        None => (),
+                    }
 
-                        if running {
-                            self.resume();
-                        } else {
-                            self.pause();
-                        }
+                    if running == 0 {
+                        self.pause();
+                    } else if running == 1 {
+                        self.resume();
                     } else {
+                        self.stop();
                         break;
                     }
+                } else {
+                    break;
                 }
-                println!("Closing event handler loop");
             }
+        }
+
+        fn notui_event_handler(&self) {
+            //event loop
+            loop {
+                if !self.jh.is_finished() {
+                    let mut cmd = String::new();
+                    stdin().read_line(&mut cmd).unwrap();
+                    if cmd.chars().nth(0).unwrap() == 'P' {
+                        self.pause();
+                    } else if cmd.chars().nth(0).unwrap() == 'R' {
+                        self.resume();
+                    } else if cmd.chars().nth(0).unwrap() == 'Q'{
+                        self.stop();
+                        break;
+                    } else {
+                        println!("Undefined command!");
+                        continue;
+                    }
+                } else {
+                    break;
+                }
+            }
+        }
     }
 
 
@@ -425,10 +509,7 @@ pub mod sniffer {
                 destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
                 source_mac_address: to_mac_address(&pcap_packet, 6, 11),
                 level_three_type: to_level_three_protocol(to_u16(&pcap_packet,12)),
-
-
                 total_length: pcap_packet.header.len,
-
                 level_four_protocol: to_level_four_protocol(pcap_packet[23]),
                 source_address: to_ip_address(&pcap_packet, 26, 29),
                 destination_address: to_ip_address(&pcap_packet, 30, 33),
@@ -450,7 +531,7 @@ pub mod sniffer {
             let mut s = String::new();
             s.push_str(&*("IP_s: ".to_owned() + &self.source_address
                 + &*" Port_s: ".to_owned() + &self.source_port.to_string()));
-                s
+            s
         }
 
         fn to_string_dest_socket(&self) -> String {
@@ -467,6 +548,29 @@ pub mod sniffer {
                 + &*" L4_Prot ".to_owned() + &self.level_four_protocol
                 + &*" TS: ".to_owned() + &self.timestamp.to_string()));
             s
+        }
+
+        fn print_packet(&self, tui_window: Option<&Window>) {
+            if tui_window.is_some() {
+                tui_window.as_ref().unwrap().printw(self.to_string_mac());
+                tui_window.as_ref().unwrap().printw("\n");
+                tui_window.as_ref().unwrap().printw(self.to_string_source_socket());
+                tui_window.as_ref().unwrap().printw("\n");
+                tui_window.as_ref().unwrap().printw(self.to_string_dest_socket());
+                tui_window.as_ref().unwrap().printw("\n");
+                tui_window.as_ref().unwrap().printw(self.info());
+                tui_window.as_ref().unwrap().printw("\n");
+                tui_window.as_ref().unwrap().printw("\n");
+                tui_window.as_ref().unwrap().refresh();
+            } else {
+                let format =
+                        self.to_string_mac().as_str().to_owned() + "\n" +
+                        self.to_string_source_socket().as_str() + "\n" +
+                        self.to_string_dest_socket().as_str() + "\n" +
+                        self.info().as_str() + "\n"
+                ;
+                println!("{}", format);
+            }
         }
 
     }
@@ -505,22 +609,6 @@ pub mod sniffer {
 
         Ok(dev_names)
     }
-
-
-    //pub fn na_config(){
-       // let mut adapter_name = String::new();
-       // let mut report_file_name = String::new();
-
-       // println!("Select the adapter to sniff: ");
-       // println!("{}", list_adapters().unwrap());
-       // stdout().flush().unwrap();
-       // stdin().read_line(&mut adapter_name).unwrap();
-
-        // println!("Define .txt report file path and name: ");
-        // stdout().flush().unwrap();
-        // stdin().read_line(&mut report_file_name).unwrap();
-
-    //}
 
 
     #[derive(Debug, Clone)]

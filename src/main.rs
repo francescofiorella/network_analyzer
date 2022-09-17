@@ -20,7 +20,7 @@ struct Args {
     update_time: i32,
     #[clap(short, long, value_parser, default_value = "None")]
     filter: String,
-    #[clap(short, long, value_parser, default_value = "true")]
+    #[clap(short, long, value_parser, default_value = "false")]
     tui: bool,
 }
 
@@ -29,11 +29,13 @@ fn main() {
 
     //Application state
     let s = Sniffer::new(args.adapter, args.output, args.update_time, args.filter, args.tui).unwrap();
-    if args.tui {
-        s.event_handler();
-    }
-    //Process closing
-    s.jh.join().unwrap();
+    //event handler
+        //Main thread in loop qui dentro
+        s.enable_commands();
+        //Main thread attende qui la terminazione di jh, dopo la quale termina il processo
+        //DA TOGLIERE DA QUI, BISOGNERA' GESTIRLA CON IL DISTRUTTORE...
+        s.jh.join().unwrap();
+
 
 }
 
