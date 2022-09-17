@@ -7,7 +7,7 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{A_BLINK, A_REVERSE, ALL_MOUSE_EVENTS, curs_set, getmouse, initscr, Input, mousemask, newwin, noecho, resize_term, Window};
+    use cursive::backends::curses::pan::pancurses::{A_BLINK, A_REVERSE, ALL_MOUSE_EVENTS, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, getmouse, init_pair, initscr, Input, mousemask, newwin, noecho, resize_term, start_color, Window};
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -19,6 +19,14 @@ pub mod sniffer {
     fn tui_init(adapter: &str, filter: &str, output: &str, update_time: i32) -> Window {
         //screen initialization
         let mut window = initscr();
+        start_color();
+        init_pair(1,COLOR_WHITE,COLOR_BLACK);
+        init_pair(2,COLOR_YELLOW,COLOR_BLACK);
+        init_pair(3,COLOR_RED,COLOR_BLACK);
+        init_pair(4,COLOR_GREEN,COLOR_BLACK);
+        init_pair(5,COLOR_BLUE,COLOR_BLACK);
+
+
 
         //screen settings
         resize_term(42, 80);
@@ -31,6 +39,7 @@ pub mod sniffer {
         //subwindow 2
         let sub2 = window.subwin(6, 67, 0, 12).unwrap();
         sub2.draw_box(0,0);
+        sub2.attron(COLOR_PAIR(4));
         sub2.mvprintw(1, 1, "Adapter: ");
         sub2.mvprintw(1, 9, adapter);
         sub2.mvprintw(2, 1, "Filter: ");
@@ -39,6 +48,7 @@ pub mod sniffer {
         sub2.mvprintw(3, 14, output);
         sub2.mvprintw(4, 1, "Output upd. time (ms): ");
         sub2.mvprintw(4, 24, update_time.to_string().as_str());
+        sub2.attroff(COLOR_PAIR(4));
         sub2.refresh();
 
         //subwindow 3
@@ -637,13 +647,19 @@ pub mod sniffer {
 
         fn print_packet(&self, tui_window: Option<&Window>) {
             if tui_window.is_some() {
+                tui_window.unwrap().attron(COLOR_PAIR(2));
                 tui_window.as_ref().unwrap().printw(self.to_string_mac());
                 tui_window.as_ref().unwrap().printw("\n");
+                tui_window.unwrap().attroff(COLOR_PAIR(2));
+                tui_window.unwrap().attron(COLOR_PAIR(3));
                 tui_window.as_ref().unwrap().printw(self.to_string_source_socket());
                 tui_window.as_ref().unwrap().printw("\n");
                 tui_window.as_ref().unwrap().printw(self.to_string_dest_socket());
                 tui_window.as_ref().unwrap().printw("\n");
+                tui_window.unwrap().attroff(COLOR_PAIR(3));
+                tui_window.unwrap().attron(COLOR_PAIR(5));
                 tui_window.as_ref().unwrap().printw(self.info());
+                tui_window.unwrap().attroff(COLOR_PAIR(5));
                 tui_window.as_ref().unwrap().printw("\n");
                 tui_window.as_ref().unwrap().printw("\n");
                 tui_window.as_ref().unwrap().refresh();
