@@ -7,7 +7,7 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{A_BLINK, A_REVERSE, ALL_MOUSE_EVENTS, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, getmouse, init_pair, initscr, Input, mousemask, newwin, noecho, resize_term, start_color, Window};
+    use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
@@ -433,11 +433,11 @@ pub mod sniffer {
         //level 3 header
         level_three_type: String, // 12 - 13
         total_length: u32, // 16 - 17
-        source_address: String, // 26 - 29
-        destination_address: String, // 30 - 33
+        source_address: Option<String>, // 26 - 29
+        destination_address: Option<String>, // 30 - 33
 
         //level 4 header
-        level_four_protocol: String, // 23
+        level_four_protocol: Option<String>, // 23
         source_port: Option<u16>, // 34 - 35
         destination_port: Option<u16>, // 36 - 37
 
@@ -517,9 +517,9 @@ pub mod sniffer {
         match prot_num {
             2048 => "IPv4".to_string(), // 0x0800
             2054 => "ARP".to_string(), // 0x0806
+            34525 => "IPv6".to_string(), // 0x86dd
             33024 => "IEEE 802.1Q".to_string(), // 0x8100
             35041 => "HomePlug AV".to_string(), // 0x88e1
-            34525 => "IPv6".to_string(), // 0x86dd
             _ => "Unknown".to_string()
         }
     }
@@ -536,32 +536,32 @@ pub mod sniffer {
 
                 other: match eth_type {
                     2054 => if pcap_packet[21] == 1 { "ARP Request".to_string() } else { "ARP Reply".to_string() }, // ARP, OpCode byte 21 = 1 Request, 2 Reply
-                    _ => " ".to_string()
+                    _ => "".to_string()
                 },
 
                 source_address: match eth_type {
-                    2048 => to_ip_address(&pcap_packet, 26, 29), //IPv4
-                    2054 => to_ip_address(&pcap_packet, 28, 31), // ARP Sender IP
-                    34525 => to_ipv6_address(&pcap_packet, 22, 37), //IPv6
-                    _ => " ".to_string()
+                    2048 => Some(to_ip_address(&pcap_packet, 26, 29)), //IPv4
+                    2054 => Some(to_ip_address(&pcap_packet, 28, 31)), // ARP Sender IP
+                    34525 => Some(to_ipv6_address(&pcap_packet, 22, 37)), //IPv6
+                    _ => None
                 },
 
                 destination_address: match eth_type {
-                    2048 => to_ip_address(&pcap_packet, 30, 33), //IPv4
-                    2054 => to_ip_address(&pcap_packet, 38, 41), // ARP Target IP
-                    34525 => to_ipv6_address(&pcap_packet, 38, 53), //IPv6
-                    _ => " ".to_string()
+                    2048 => Some(to_ip_address(&pcap_packet, 30, 33)), //IPv4
+                    2054 => Some(to_ip_address(&pcap_packet, 38, 41)), // ARP Target IP
+                    34525 => Some(to_ipv6_address(&pcap_packet, 38, 53)), //IPv6
+                    _ => None
                 },
 
                 total_length: pcap_packet.header.len,
 
                 level_four_protocol: match eth_type {
-                    2048 => to_level_four_protocol(pcap_packet[23]), //IPv4
+                    2048 => Some(to_level_four_protocol(pcap_packet[23])), //IPv4
                     34525 => match pcap_packet[20] { //IPv6 byte 20 is Next Header
-                        6 | 17 | 58 => to_level_four_protocol(pcap_packet[20]), //IPv6 + TCP or IPv6 + UDP IPv6 + ICMPv6
-                        _ => "".to_string()
+                        6 | 17 | 58 => Some(to_level_four_protocol(pcap_packet[20])), //IPv6 + TCP or IPv6 + UDP IPv6 + ICMPv6
+                        _ => None
                     },
-                    _ => "".to_string()
+                    _ => None
                 },
 
                 source_port: match eth_type {
@@ -603,14 +603,14 @@ pub mod sniffer {
 
         fn to_string_source_socket(&self) -> String {
             let mut s = String::new();
-            s.push_str(&*("IP_s: ".to_owned() + &self.source_address
+            s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone())
                 + &*" Port_s: ".to_owned() + &option_to_string(self.source_port)));
             s
         }
 
         fn to_string_dest_socket(&self) -> String {
             let mut s = String::new();
-            s.push_str(&*("IP_d: ".to_owned() + &self.destination_address
+            s.push_str(&*("IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())
                 + &*" Port_d: ".to_owned() + &option_to_string(self.destination_port)));
             s
         }
@@ -619,7 +619,7 @@ pub mod sniffer {
             let mut s = String::new();
             s.push_str(&*("L3_type: ".to_owned() + &self.level_three_type.to_string()
                 + &*" Len: ".to_owned() + &self.total_length.to_string()
-                + &*" L4_Prot: ".to_owned() + &self.level_four_protocol
+                + &*" L4_Prot: ".to_owned() + &option_to_string(self.level_four_protocol.clone())
                 + &*" TS: ".to_owned() + &self.timestamp.to_string()));
             s
         }
@@ -690,22 +690,36 @@ pub mod sniffer {
 
 
     #[derive(Debug, Clone)]
-    pub struct Stats {
-        sockets: [(String, Option<u16>); 2],
+    struct Stats {
+        sockets: [(Option<String>, Option<u16>); 2],
         l3_protocol: String,
+        l4_protocol: Option<String>,
         total_bytes: u128,
         first_timestamp: u128,
         last_timestamp: u128,
     }
 
     impl Stats {
-        pub fn new(sockets: [(String, Option<u16>); 2], l3_protocol: String) -> Self {
+        fn new(sockets: [(Option<String>, Option<u16>); 2], l3_protocol: String, l4_protocol: Option<String>,
+                   total_bytes: u128, first_timestamp: u128, last_timestamp: u128) -> Self {
             Stats {
                 sockets,
                 l3_protocol,
-                total_bytes: 0,
-                first_timestamp: 0,
-                last_timestamp: 0,
+                l4_protocol,
+                total_bytes,
+                first_timestamp,
+                last_timestamp,
+            }
+        }
+
+        fn from_napacket(packet: NAPacket) -> Self {
+            Stats {
+                sockets: [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
+                l3_protocol: packet.level_three_type,
+                l4_protocol: packet.level_four_protocol,
+                total_bytes: packet.total_length as u128,
+                first_timestamp: packet.timestamp,
+                last_timestamp: packet.timestamp
             }
         }
     }
@@ -715,21 +729,19 @@ pub mod sniffer {
             for packet in packets {
                 // controlla il socket del pacchetto
                 if stats.is_empty() {
-                    let mut stat = Stats::new(
-                        [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
-                        packet.level_three_type,
-                    );
-                    stat.total_bytes = packet.total_length as u128;
-                    stat.first_timestamp = packet.timestamp;
-                    stat.last_timestamp = packet.timestamp;
+                    let stat = Stats::from_napacket(packet.clone());
                     stats.push(stat);
                 } else {
-                    let first_socket = (packet.source_address, packet.source_port);
-                    let second_socket = (packet.destination_address, packet.destination_port);
+                    let first_socket = (packet.source_address.clone(), packet.source_port.clone());
+                    let second_socket = (packet.destination_address.clone(), packet.destination_port.clone());
                     // check if the socket is contained in old_stats
                     let mut modified = false;
                     'inner: for stat in stats.iter_mut() {
-                        if stat.sockets.contains(&first_socket) && stat.sockets.contains(&second_socket) {
+                        if stat.sockets.contains(&first_socket)
+                            && stat.sockets.contains(&second_socket)
+                            && stat.l4_protocol == packet.level_four_protocol
+                            && stat.l3_protocol == packet.level_three_type
+                        {
                             stat.total_bytes += packet.total_length as u128;
                             stat.last_timestamp = packet.timestamp;
                             modified = true;
@@ -737,13 +749,7 @@ pub mod sniffer {
                         }
                     }
                     if !modified {
-                        let mut stat = Stats::new(
-                            [first_socket.clone(), second_socket.clone()],
-                            packet.level_three_type.clone(),
-                        );
-                        stat.total_bytes = packet.total_length as u128;
-                        stat.first_timestamp = packet.timestamp;
-                        stat.last_timestamp = packet.timestamp;
+                        let stat = Stats::from_napacket(packet.clone());
                         stats.push(stat);
                     }
                 }
@@ -773,19 +779,22 @@ pub mod sniffer {
 
             // SOCKET
             // write the first ip address
-            writeln!(report, "First IP address: {}", stat.sockets[0].0)
+            writeln!(report, "First IP address: {}", option_to_string(stat.sockets[0].0.clone()))
                 .expect("Unable to write the report file!");
             // write the first port
             writeln!(report, "First Port: {}", option_to_string(stat.sockets[0].1))
                 .expect("Unable to write the report file!");
             // write the second ip address
-            writeln!(report, "Second IP address: {}", stat.sockets[1].0)
+            writeln!(report, "Second IP address: {}", option_to_string(stat.sockets[1].0.clone()))
                 .expect("Unable to write the report file!");
             // write the second port
             writeln!(report, "Second Port: {}", option_to_string(stat.sockets[1].1))
                 .expect("Unable to write the report file!");
-            // write the list of transported protocols
+            // write the l3 protocol
             writeln!(report, "Level three protocol: {}", stat.l3_protocol)
+                .expect("Unable to write the report file!");
+            // write the l4 protocol
+            writeln!(report, "Level four protocol: {}", option_to_string(stat.l4_protocol.clone()))
                 .expect("Unable to write the report file!");
             // write the total number of bytes
             writeln!(report, "Cumulated number of bytes transmitted: {}", stat.total_bytes)
