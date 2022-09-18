@@ -3,6 +3,7 @@ pub mod sniffer {
     use std::fmt::{Display, Formatter};
     use std::fs::File;
     use std::io::{stdin, Write};
+    use std::net::Ipv6Addr;
     use pcap::{Capture, Device, Packet};
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
@@ -469,7 +470,18 @@ pub mod sniffer {
     }
 
     fn to_ipv6_address(p: &Packet, start: usize, end: usize) -> String {
-        let mut s = String::new();
+        assert_eq!(end - start, 15);
+        let address = Ipv6Addr::new(
+            p[start] as u16 * 256 + p[start+1],
+            p[start+2] as u16 * 256 + p[start+3],
+            p[start+4] as u16 * 256 + p[start+5],
+            p[start+6] as u16 * 256 + p[start+7],
+            p[start+8] as u16 * 256 + p[start+9],
+            p[start+10] as u16 * 256 + p[start+11],
+            p[start+12] as u16 * 256 + p[start+13],
+            p[start+14] as u16 * 256 + p[start+15],
+        );
+        /*let mut s = String::new();
         let mut count = 0;
         (start..end).for_each(|byte| {
             if &p[byte].to_string() == "0" {
@@ -488,8 +500,8 @@ pub mod sniffer {
                     s.push_str(":");
                 }
             }
-        });
-        s
+        });*/
+        address.to_string()
     }
 
     fn to_u16(p: &Packet, start: usize) -> u16 {
