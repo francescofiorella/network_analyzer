@@ -3,12 +3,13 @@ pub mod sniffer {
     use std::fmt::{Display, Formatter};
     use std::fs::File;
     use std::io::{stdin, Write};
-    use std::net::Ipv6Addr;
+    use std::net::{Ipv4Addr, Ipv6Addr};
     use pcap::{Capture, Device, Packet};
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+    use mac_address::MacAddress;
     use rustc_serialize::hex::ToHex;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
@@ -446,62 +447,37 @@ pub mod sniffer {
         other: String,
     }
 
-    fn to_mac_address(p: &Packet, start: usize, end: usize) -> String {
-        let mut s = String::new();
-        (start..=end).for_each(|byte| {
-            s.push_str(&[p[byte]].to_hex());
-            if byte != end {
-                s.push_str(":");
-            }
-        });
-        s
+    fn to_mac_address(p: &Packet, start: usize) -> String {
+        MacAddress::new([
+            p[start],
+            p[start+1],
+            p[start+2],
+            p[start+3],
+            p[start+4],
+            p[start+5]
+        ]).to_string()
     }
 
-    //da gestire la casistica in cui level_three_type: 6
-    fn to_ip_address(p: &Packet, start: usize, end: usize) -> String {
-        let mut s = String::new();
-        (start..=end).for_each(|byte| {
-            s.push_str(&p[byte].to_string());
-            if byte != end {
-                s.push_str(".");
-            }
-        });
-        s
+    fn to_ip_address(p: &Packet, start: usize) -> String {
+        Ipv4Addr::new(
+            p[start],
+            p[start+1],
+            p[start+2],
+            p[start+3]
+        ).to_string()
     }
 
-    fn to_ipv6_address(p: &Packet, start: usize, end: usize) -> String {
-        assert_eq!(end - start, 15);
-        let address = Ipv6Addr::new(
-            p[start] as u16 * 256 + p[start+1],
-            p[start+2] as u16 * 256 + p[start+3],
-            p[start+4] as u16 * 256 + p[start+5],
-            p[start+6] as u16 * 256 + p[start+7],
-            p[start+8] as u16 * 256 + p[start+9],
-            p[start+10] as u16 * 256 + p[start+11],
-            p[start+12] as u16 * 256 + p[start+13],
-            p[start+14] as u16 * 256 + p[start+15],
-        );
-        /*let mut s = String::new();
-        let mut count = 0;
-        (start..end).for_each(|byte| {
-            if &p[byte].to_string() == "0" {
-                count += 1;
-            } else {
-                if count != 0 {
-                    if count == 1 {
-                        s.push_str("0:");
-                    } else {
-                        s.push_str(":");
-                    }
-                    count = 0;
-                }
-                s.push_str(&[p[byte]].to_hex());
-                if byte != end {
-                    s.push_str(":");
-                }
-            }
-        });*/
-        address.to_string()
+    fn to_ipv6_address(p: &Packet, start: usize) -> String {
+        Ipv6Addr::new(
+            p[start] as u16 * 256 + p[start+1] as u16,
+            p[start+2] as u16 * 256 + p[start+3] as u16,
+            p[start+4] as u16 * 256 + p[start+5] as u16,
+            p[start+6] as u16 * 256 + p[start+7] as u16,
+            p[start+8] as u16 * 256 + p[start+9] as u16,
+            p[start+10] as u16 * 256 + p[start+11] as u16,
+            p[start+12] as u16 * 256 + p[start+13] as u16,
+            p[start+14] as u16 * 256 + p[start+15] as u16,
+        ).to_string()
     }
 
     fn to_u16(p: &Packet, start: usize) -> u16 {
@@ -541,8 +517,8 @@ pub mod sniffer {
         fn new(pcap_packet: Packet) -> Self {
             let eth_type = to_u16(&pcap_packet, 12);
             NAPacket {
-                destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
-                source_mac_address: to_mac_address(&pcap_packet, 6, 11),
+                destination_mac_address: to_mac_address(&pcap_packet, 0),
+                source_mac_address: to_mac_address(&pcap_packet, 6),
 
                 level_three_type: to_level_three_protocol(to_u16(&pcap_packet, 12)),
 
@@ -552,16 +528,16 @@ pub mod sniffer {
                 },
 
                 source_address: match eth_type {
-                    2048 => Some(to_ip_address(&pcap_packet, 26, 29)), //IPv4
-                    2054 => Some(to_ip_address(&pcap_packet, 28, 31)), // ARP Sender IP
-                    34525 => Some(to_ipv6_address(&pcap_packet, 22, 37)), //IPv6
+                    2048 => Some(to_ip_address(&pcap_packet, 26)), //IPv4
+                    2054 => Some(to_ip_address(&pcap_packet, 28)), // ARP Sender IP
+                    34525 => Some(to_ipv6_address(&pcap_packet, 22)), //IPv6
                     _ => None
                 },
 
                 destination_address: match eth_type {
-                    2048 => Some(to_ip_address(&pcap_packet, 30, 33)), //IPv4
-                    2054 => Some(to_ip_address(&pcap_packet, 38, 41)), // ARP Target IP
-                    34525 => Some(to_ipv6_address(&pcap_packet, 38, 53)), //IPv6
+                    2048 => Some(to_ip_address(&pcap_packet, 30)), //IPv4
+                    2054 => Some(to_ip_address(&pcap_packet, 38)), // ARP Target IP
+                    34525 => Some(to_ipv6_address(&pcap_packet, 38)), //IPv6
                     _ => None
                 },
 
