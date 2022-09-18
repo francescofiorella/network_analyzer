@@ -3,12 +3,13 @@ pub mod sniffer {
     use std::fmt::{Display, Formatter};
     use std::fs::File;
     use std::io::{stdin, Write};
+    use std::net::{Ipv4Addr, Ipv6Addr};
     use pcap::{Capture, Device, Packet};
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
-    use rustc_serialize::hex::ToHex;
+    use mac_address::MacAddress;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -508,61 +509,43 @@ pub mod sniffer {
         other: String,
     }
 
-    fn to_mac_address(p: &Packet, start: usize, end: usize) -> String {
-        let mut s = String::new();
-        (start..=end).for_each(|byte| {
-            s.push_str(&[p[byte]].to_hex());
-            if byte != end {
-                s.push_str(":");
-            }
-        });
-        s
+    fn to_mac_address(p: &Packet, start: usize) -> String {
+        MacAddress::new([
+            p[start],
+            p[start+1],
+            p[start+2],
+            p[start+3],
+            p[start+4],
+            p[start+5]
+        ]).to_string()
     }
 
-    //da gestire la casistica in cui level_three_type: 6
-    fn to_ip_address(p: &Packet, start: usize, end: usize) -> String {
-        let mut s = String::new();
-        (start..=end).for_each(|byte| {
-            s.push_str(&p[byte].to_string());
-            if byte != end {
-                s.push_str(".");
-            }
-        });
-        s
+    fn to_ip_address(p: &Packet, start: usize) -> String {
+        Ipv4Addr::new(
+            p[start],
+            p[start+1],
+            p[start+2],
+            p[start+3]
+        ).to_string()
     }
 
-    fn to_ipv6_address(p: &Packet, start: usize, end: usize) -> String {
-        let mut s = String::new();
-        let mut count = 0;
-        (start..end).for_each(|byte| {
-            if &p[byte].to_string() == "0" {
-                count += 1;
-            } else {
-                if count != 0 {
-                    if count == 1 {
-                        s.push_str("0:");
-                    } else {
-                        s.push_str(":");
-                    }
-                    count = 0;
-                }
-                s.push_str(&[p[byte]].to_hex());
-                if byte != end {
-                    s.push_str(":");
-                }
-            }
-        });
-        s
+    fn to_ipv6_address(p: &Packet, start: usize) -> String {
+        Ipv6Addr::new(
+            to_u16(p, start),
+            to_u16(p, start+2),
+            to_u16(p, start+4),
+            to_u16(p, start+6),
+            to_u16(p, start+8),
+            to_u16(p, start+10),
+            to_u16(p, start+12),
+            to_u16(p, start+14),
+        ).to_string()
     }
 
     fn to_u16(p: &Packet, start: usize) -> u16 {
         let param1: u16 = p[start] as u16 * 256;
         let param2 = p[start + 1] as u16;
         param1 + param2
-    }
-
-    fn to_u4(hlen: u8) -> u8 {
-        hlen & 15
     }
 
     fn to_level_four_protocol(prot_num: u8) -> String {
@@ -592,8 +575,8 @@ pub mod sniffer {
         fn new(pcap_packet: Packet) -> Self {
             let eth_type = to_u16(&pcap_packet, 12);
             NAPacket {
-                destination_mac_address: to_mac_address(&pcap_packet, 0, 5),
-                source_mac_address: to_mac_address(&pcap_packet, 6, 11),
+                destination_mac_address: to_mac_address(&pcap_packet, 0),
+                source_mac_address: to_mac_address(&pcap_packet, 6),
 
                 level_three_type: to_level_three_protocol(to_u16(&pcap_packet, 12)),
 
@@ -603,16 +586,16 @@ pub mod sniffer {
                 },
 
                 source_address: match eth_type {
-                    2048 => Some(to_ip_address(&pcap_packet, 26, 29)), //IPv4
-                    2054 => Some(to_ip_address(&pcap_packet, 28, 31)), // ARP Sender IP
-                    34525 => Some(to_ipv6_address(&pcap_packet, 22, 37)), //IPv6
+                    2048 => Some(to_ip_address(&pcap_packet, 26)), //IPv4
+                    2054 => Some(to_ip_address(&pcap_packet, 28)), // ARP Sender IP
+                    34525 => Some(to_ipv6_address(&pcap_packet, 22)), //IPv6
                     _ => None
                 },
 
                 destination_address: match eth_type {
-                    2048 => Some(to_ip_address(&pcap_packet, 30, 33)), //IPv4
-                    2054 => Some(to_ip_address(&pcap_packet, 38, 41)), // ARP Target IP
-                    34525 => Some(to_ipv6_address(&pcap_packet, 38, 53)), //IPv6
+                    2048 => Some(to_ip_address(&pcap_packet, 30)), //IPv4
+                    2054 => Some(to_ip_address(&pcap_packet, 38)), // ARP Target IP
+                    34525 => Some(to_ipv6_address(&pcap_packet, 38)), //IPv6
                     _ => None
                 },
 
@@ -785,19 +768,7 @@ pub mod sniffer {
     }
 
     impl Stats {
-        fn new(sockets: [(Option<String>, Option<u16>); 2], l3_protocol: String, l4_protocol: Option<String>,
-                   total_bytes: u128, first_timestamp: u128, last_timestamp: u128) -> Self {
-            Stats {
-                sockets,
-                l3_protocol,
-                l4_protocol,
-                total_bytes,
-                first_timestamp,
-                last_timestamp,
-            }
-        }
-
-        fn from_napacket(packet: NAPacket) -> Self {
+        fn new(packet: NAPacket) -> Self {
             Stats {
                 sockets: [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
                 l3_protocol: packet.level_three_type,
@@ -814,7 +785,7 @@ pub mod sniffer {
             for packet in packets {
                 // controlla il socket del pacchetto
                 if stats.is_empty() {
-                    let stat = Stats::from_napacket(packet.clone());
+                    let stat = Stats::new(packet.clone());
                     stats.push(stat);
                 } else {
                     let first_socket = (packet.source_address.clone(), packet.source_port.clone());
@@ -834,7 +805,7 @@ pub mod sniffer {
                         }
                     }
                     if !modified {
-                        let stat = Stats::from_napacket(packet.clone());
+                        let stat = Stats::new(packet.clone());
                         stats.push(stat);
                     }
                 }
@@ -851,6 +822,9 @@ pub mod sniffer {
         writeln!(report).expect("Unable to write the report file!");
 
         if vec.is_empty() {
+            writeln!(report, "========================================================================")
+                .expect("Unable to write the report file!");
+            writeln!(report).expect("Unable to write the report file!");
             writeln!(report, "No traffic detected!")
                 .expect("Unable to write the report file!");
             println!("Report produced!");
