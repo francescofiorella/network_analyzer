@@ -5,7 +5,7 @@ use network_analyzer::sniffer::{Sniffer};
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    #[clap(short, long, value_parser)]
+    #[clap(short, long, value_parser, default_value = "1")]
     adapter: u8,
     #[clap(short, long, value_parser, default_value = "report")]
     output: String,

@@ -8,7 +8,7 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+    use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, endwin, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
     use mac_address::MacAddress;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
@@ -195,7 +195,7 @@ pub mod sniffer {
             let device_list = Device::list().unwrap();
             let mut couple = Vec::<(u8, Device)>::new();
             for (index, device) in device_list.into_iter().enumerate() {
-                couple.push((index as u8, device));
+                couple.push((index as u8 + 1 , device));
             }
             let device = match couple.into_iter().find(|c| c.0 == adapter) {
                 Some((index, dev)) => dev,
