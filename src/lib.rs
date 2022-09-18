@@ -10,7 +10,6 @@ pub mod sniffer {
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
     use mac_address::MacAddress;
-    use rustc_serialize::hex::ToHex;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -469,14 +468,14 @@ pub mod sniffer {
 
     fn to_ipv6_address(p: &Packet, start: usize) -> String {
         Ipv6Addr::new(
-            p[start] as u16 * 256 + p[start+1] as u16,
-            p[start+2] as u16 * 256 + p[start+3] as u16,
-            p[start+4] as u16 * 256 + p[start+5] as u16,
-            p[start+6] as u16 * 256 + p[start+7] as u16,
-            p[start+8] as u16 * 256 + p[start+9] as u16,
-            p[start+10] as u16 * 256 + p[start+11] as u16,
-            p[start+12] as u16 * 256 + p[start+13] as u16,
-            p[start+14] as u16 * 256 + p[start+15] as u16,
+            to_u16(p, start),
+            to_u16(p, start+2),
+            to_u16(p, start+4),
+            to_u16(p, start+6),
+            to_u16(p, start+8),
+            to_u16(p, start+10),
+            to_u16(p, start+12),
+            to_u16(p, start+14),
         ).to_string()
     }
 
@@ -484,10 +483,6 @@ pub mod sniffer {
         let param1: u16 = p[start] as u16 * 256;
         let param2 = p[start + 1] as u16;
         param1 + param2
-    }
-
-    fn to_u4(hlen: u8) -> u8 {
-        hlen & 15
     }
 
     fn to_level_four_protocol(prot_num: u8) -> String {
@@ -688,19 +683,7 @@ pub mod sniffer {
     }
 
     impl Stats {
-        fn new(sockets: [(Option<String>, Option<u16>); 2], l3_protocol: String, l4_protocol: Option<String>,
-                   total_bytes: u128, first_timestamp: u128, last_timestamp: u128) -> Self {
-            Stats {
-                sockets,
-                l3_protocol,
-                l4_protocol,
-                total_bytes,
-                first_timestamp,
-                last_timestamp,
-            }
-        }
-
-        fn from_napacket(packet: NAPacket) -> Self {
+        fn new(packet: NAPacket) -> Self {
             Stats {
                 sockets: [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
                 l3_protocol: packet.level_three_type,
@@ -717,7 +700,7 @@ pub mod sniffer {
             for packet in packets {
                 // controlla il socket del pacchetto
                 if stats.is_empty() {
-                    let stat = Stats::from_napacket(packet.clone());
+                    let stat = Stats::new(packet.clone());
                     stats.push(stat);
                 } else {
                     let first_socket = (packet.source_address.clone(), packet.source_port.clone());
@@ -737,7 +720,7 @@ pub mod sniffer {
                         }
                     }
                     if !modified {
-                        let stat = Stats::from_napacket(packet.clone());
+                        let stat = Stats::new(packet.clone());
                         stats.push(stat);
                     }
                 }
