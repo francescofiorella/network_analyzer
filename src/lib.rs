@@ -737,6 +737,9 @@ pub mod sniffer {
         writeln!(report).expect("Unable to write the report file!");
 
         if vec.is_empty() {
+            writeln!(report, "========================================================================")
+                .expect("Unable to write the report file!");
+            writeln!(report).expect("Unable to write the report file!");
             writeln!(report, "No traffic detected!")
                 .expect("Unable to write the report file!");
             println!("Report produced!");
