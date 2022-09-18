@@ -744,52 +744,51 @@ pub mod sniffer {
         // crea il file o tronca al byte 0 se il file esiste già
         let mut report = File::create(file_name.clone()).unwrap(); // returns a Result
         // scrivi le stringhe nel report
-        writeln!(report, "Sniffer report")
+        writeln!(report).expect("Unable to write the report file!");
+        writeln!(report, "# Sniffer report")
             .expect("Unable to write the report file!");
         writeln!(report).expect("Unable to write the report file!");
 
         if vec.is_empty() {
-            writeln!(report, "========================================================================")
-                .expect("Unable to write the report file!");
-            writeln!(report).expect("Unable to write the report file!");
             writeln!(report, "No traffic detected!")
                 .expect("Unable to write the report file!");
             println!("Report produced!");
             return vec;
         }
 
-        for stat in vec.clone() {
-            writeln!(report, "========================================================================")
-                .expect("Unable to write the report file!");
-            writeln!(report).expect("Unable to write the report file!");
+        // HEADLINE
+        writeln!(report, "| First IP Address | First Port | Second IP Address | Second Port | Level Three Protocol | Transported Protocol | Bytes Transmitted | First Timestamp | Last Timestamp |")
+            .expect("Unable to write the report file!");
+        writeln!(report, "|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|")
+            .expect("Unable to write the report file!");
 
-            // SOCKET
+        for stat in vec.clone() {
             // write the first ip address
-            writeln!(report, "First IP address: {}", option_to_string(stat.sockets[0].0.clone()))
+            write!(report, "| {} ", option_to_string(stat.sockets[0].0.clone()))
                 .expect("Unable to write the report file!");
             // write the first port
-            writeln!(report, "First Port: {}", option_to_string(stat.sockets[0].1))
+            write!(report, "| {} ", option_to_string(stat.sockets[0].1))
                 .expect("Unable to write the report file!");
             // write the second ip address
-            writeln!(report, "Second IP address: {}", option_to_string(stat.sockets[1].0.clone()))
+            write!(report, "| {} ", option_to_string(stat.sockets[1].0.clone()))
                 .expect("Unable to write the report file!");
             // write the second port
-            writeln!(report, "Second Port: {}", option_to_string(stat.sockets[1].1))
+            write!(report, "| {} ", option_to_string(stat.sockets[1].1))
                 .expect("Unable to write the report file!");
             // write the l3 protocol
-            writeln!(report, "Level three protocol: {}", stat.l3_protocol)
+            write!(report, "| {} ", stat.l3_protocol)
                 .expect("Unable to write the report file!");
-            // write the l4 protocol
-            writeln!(report, "Transported protocol: {}", option_to_string(stat.transported_protocol.clone()))
+            // write the transported protocol
+            write!(report, "| {} ", option_to_string(stat.transported_protocol.clone()))
                 .expect("Unable to write the report file!");
             // write the total number of bytes
-            writeln!(report, "Cumulated number of bytes transmitted: {}", stat.total_bytes)
+            write!(report, "| {} ", stat.total_bytes)
                 .expect("Unable to write the report file!");
             // write the first timestamp
-            writeln!(report, "Timestamp of the first occurrence of information exchanged: {}", stat.first_timestamp)
+            write!(report, "| {} ", stat.first_timestamp)
                 .expect("Unable to write the report file!");
             // write the last timestamp
-            writeln!(report, "Timestamp of the last occurrence of information exchanged: {}", stat.last_timestamp)
+            write!(report, "| {} |", stat.last_timestamp)
                 .expect("Unable to write the report file!");
             writeln!(report).expect("Unable to write the report file!");
         }
@@ -802,8 +801,8 @@ pub mod sniffer {
 
         pub fn get_file_name(mut string: String) -> String {
             string = string.trim().to_string();
-            if !string.ends_with(".txt") {
-                string.push_str(".txt");
+            if !string.ends_with(".md") {
+                string.push_str(".md");
             }
             string
         }
