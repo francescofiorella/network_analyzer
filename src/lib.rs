@@ -16,8 +16,33 @@ pub mod sniffer {
     const PAUSE: &str = "****** SNIFFING PAUSED ******";
     const QUIT: &str = "****** SNIFFING CONCLUDED ******";
 
+    fn get_filter(filter: &String) -> Result<Filter, NAError> {
+        //Actually available filters
+        let f = filter.as_str();
+        match f {
+            "none" => Ok(Filter::None),
+            "ipv4" => Ok(Filter::IPv4),
+            "ipv6" => Ok(Filter::IPv6),
+            "arp" => Ok(Filter::ARP),
+            string if string.contains('.') => {
+                let mut v = Vec::<&str>::new();
+                v = string.split('.').collect();
+                if v.len() == 4 {
+                    for u8_block in v {
+                        if u8_block.parse::<u8>().is_err() {
+                            return Err(NAError::new("Not an IP addr. as filter"))
+                        }
+                    }
+                    return Ok(Filter::IP(string.to_string()))
+                }
+                return Err(NAError::new("Not an IP addr. as filter"))
+            }
+            string if string.parse::<u16>().is_ok() => Ok(Filter::Port(string.parse::<u16>().unwrap())),
+            _ => Err(NAError::new("Unavailable filter")),
+        }
+    }
 
-    fn tui_init(adapter: &str, filter: &str, output: &str, update_time: u64) -> Window {
+    fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
         //screen initialization
         let window = initscr();
         start_color();
@@ -29,6 +54,8 @@ pub mod sniffer {
 
         //screen settings
         if cfg!(target_os = "macos") {
+            resize_term(0,0);
+        } else if cfg!(target_os = "linux") {
             resize_term(0, 0);
         } else {
             resize_term(42, 80);
@@ -45,7 +72,7 @@ pub mod sniffer {
         sub2.mvprintw(1, 1, "Adapter: ");
         sub2.mvprintw(1, 9, adapter);
         sub2.mvprintw(2, 1, "Filter: ");
-        sub2.mvprintw(2, 9, filter);
+        sub2.mvprintw(2, 9, filter.to_string());
         sub2.mvprintw(3, 1, "Output file: ");
         sub2.mvprintw(3, 14, output);
         sub2.mvprintw(4, 1, "Output upd. time (ms): ");
@@ -102,6 +129,35 @@ pub mod sniffer {
         }
     }
 
+    #[derive(Clone)]
+    enum Filter {
+        None,
+        IPv4,
+        IPv6,
+        ARP,
+        IP(String),
+        Port(u16),
+    }
+
+    impl ToString for Filter {
+        fn to_string(&self) -> String {
+            match self {
+                Filter::None => "None".to_string(),
+                Filter::IPv4 => "IPv4".to_string(),
+                Filter::IPv6 => "IPv6".to_string(),
+                Filter::ARP => "ARP".to_string(),
+                Filter::IP(ip) => ("IP ".to_owned() + ip).to_string(),
+                Filter::Port(port) => {
+                    let mut s = String::from("port ");
+                    s.push_str(&port.to_string());
+                    s
+                }
+
+            }
+        }
+    }
+
+
     #[derive(Debug, Clone)]
     enum NAState {
         RESUMED,
@@ -130,16 +186,24 @@ pub mod sniffer {
     }
 
     impl Sniffer {
-        pub fn new(adapter: String, output: String, update_time: u64, filter: String, tui: bool) -> Result<Self, NAError> {
+        pub fn new(adapter: u8, output: String, update_time: u64, filter: String, tui: bool) -> Result<Self, NAError> {
             let report_file_name = get_file_name(output.clone());
             let report_file_name_cl = report_file_name.clone();
             let report_file_name_cl_2 = report_file_name.clone();
 
-
             let device_list = Device::list().unwrap();
-            let device = match device_list.into_iter().find(|d| d.name == adapter) {
-                Some(dev) => dev,
+            let mut couple = Vec::<(u8, Device)>::new();
+            for (index, device) in device_list.into_iter().enumerate() {
+                couple.push((index as u8, device));
+            }
+            let device = match couple.into_iter().find(|c| c.0 == adapter) {
+                Some((index, dev)) => dev,
                 None => return Err(NAError::new("Device not found")),
+            };
+
+            let enum_filter = match get_filter(&filter.to_ascii_lowercase()) {
+                Ok(f) => f,
+                Err(e) => return Err(e),
             };
 
             let mut main_window = None;
@@ -148,7 +212,7 @@ pub mod sniffer {
 
             match tui {
                 true => {
-                    main_window = Some(tui_init(&adapter, &filter, &output, update_time));
+                    main_window = Some(tui_init(&device.name, &enum_filter, &output, update_time));
                     state_window = Some(state_win_init());
                     tui_handler = (main_window, true, state_window);
                 }
@@ -229,16 +293,15 @@ pub mod sniffer {
 
                                 let p = NAPacket::new(packet.clone());
 
-                                // now check the filter
+                                if p.filter(enum_filter.clone()) {
+                                    match tui {
+                                        true => p.print_packet(sub4.as_ref()),
+                                        false => p.print_packet(None),
+                                    }
 
-                                match tui {
-                                    true => p.print_packet(sub4.as_ref()),
-                                    false => p.print_packet(None),
+                                    mg.1.push(p);
                                 }
 
-                                mg.1.push(p);
-
-                                // end of the filter check
                             }
                             Err(e) => {
                                 match tui {
@@ -650,6 +713,28 @@ pub mod sniffer {
                         self.info().as_str() + "\n"
                     ;
                 println!("{}", format);
+            }
+        }
+
+        fn filter(&self, filter: Filter) -> bool {
+            match filter {
+                Filter::None => true,
+                Filter::IPv4 if self.level_three_type == "IPv4" => true,
+                Filter::IPv6 if self.level_three_type == "IPv6" => true,
+                Filter::ARP if self.level_three_type == "ARP" => true,
+                Filter::IP(ip) => {
+                    if self.source_address.is_some() && self.destination_address.is_some() {
+                        return ip == *self.destination_address.as_ref().unwrap() || ip == *self.source_address.as_ref().unwrap()
+                    }
+                    false
+                },
+                Filter::Port(port) => {
+                    if self.source_port.is_some() && self.source_port.is_some() {
+                        return port == self.source_port.unwrap() || port == self.destination_port.unwrap()
+                    }
+                    false
+                }
+                _ => false,
             }
         }
     }

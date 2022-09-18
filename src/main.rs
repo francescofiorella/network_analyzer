@@ -6,7 +6,7 @@ use network_analyzer::sniffer::{Sniffer};
 #[clap(author, version, about, long_about = None)]
 struct Args {
     #[clap(short, long, value_parser)]
-    adapter: String,
+    adapter: u8,
     #[clap(short, long, value_parser, default_value = "report")]
     output: String,
     #[clap(short, long, value_parser, default_value = "10000")]
