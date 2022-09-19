@@ -844,7 +844,7 @@ pub mod sniffer {
         }
 
         // HEADLINE
-        writeln!(report_md, "| First IP Address | First Port | Second IP Address | Second Port | Level Three Protocol | Transported Protocol | Bytes Transmitted | First Timestamp | Last Timestamp |")
+        writeln!(report_md, "| Endpoint 1 IP | Endpoint 1 Port | Endpoint 2 IP | Endpoint 2 Port | Level Three Protocol | Transported Protocol | Bytes Transmitted | First Timestamp | Last Timestamp |")
             .expect("Unable to write the report file!");
         writeln!(report_md, "|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|")
             .expect("Unable to write the report file!");
@@ -856,29 +856,30 @@ pub mod sniffer {
             let first_ip = option_to_string(stat.sockets[0].0.clone());
             write!(report_md, "| {} ", first_ip).expect("Unable to write the report file!");
             write!(report_xml, "<data_flow>").expect("Unable to write the report file!");;
-            write!(report_xml, "<first_ip>{}</first_ip>", first_ip).expect("Unable to write the report file!");
+            write!(report_xml, "<endpoint1_ip>{}</endpoint1_ip>", first_ip).expect("Unable to write the report file!");
 
             // write the first port
             let first_port = option_to_string(stat.sockets[0].1);
             write!(report_md, "| {} ", first_port).expect("Unable to write the report file!");
-            write!(report_xml, "<first_port>{}</first_port>", first_port).expect("Unable to write the report file!");
+            write!(report_xml, "<endpoint1_port>{}</endpoint1_port>", first_port).expect("Unable to write the report file!");
 
             // write the second ip address
             let second_ip = option_to_string(stat.sockets[1].0.clone());
             write!(report_md, "| {} ", second_ip).expect("Unable to write the report file!");
-            write!(report_xml, "<second_ip>{}</second_ip>", second_ip).expect("Unable to write the report file!");
+            write!(report_xml, "<endpoint2_ip>{}</endpoint2_ip>", second_ip).expect("Unable to write the report file!");
 
             // write the second port
             let second_port = option_to_string(stat.sockets[1].1);
             write!(report_md, "| {} ", second_port).expect("Unable to write the report file!");
-            write!(report_xml, "<second_port>{}</second_port>", second_port).expect("Unable to write the report file!");
+            write!(report_xml, "<endpoint2_port>{}</endpoint2_port>", second_port).expect("Unable to write the report file!");
 
             // write the l3 protocol
             write!(report_md, "| {} ", stat.l3_protocol).expect("Unable to write the report file!");
             write!(report_xml, "<l3_prot>{}</l3_prot>", stat.l3_protocol).expect("Unable to write the report file!");
 
+
             // write the transported protocol
-            let transp_prot = option_to_string(stat.transported_protocol.clone());
+            let transp_prot = option_to_string(stat.transported_protocol);
             write!(report_md, "| {} ", transp_prot).expect("Unable to write the report file!");
             write!(report_xml, "<transp_prot>{}</transp_prot>", transp_prot).expect("Unable to write the report file!");
 
