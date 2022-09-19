@@ -578,14 +578,14 @@ pub mod sniffer {
     fn to_transported_protocol(prot_num: u8) -> String {
         match prot_num {
             // 0, 43, 44, 51, 60, 135 have already been managed (SHOULD NOT BE POSSIBLE)
-            6 => "TCP",
-            17 => "UDP",
+            6 => "TCP", // Transmission Control Protocol
+            17 => "UDP", // User Datagram Protocol
 
             // No Ports
             1 => "ICMP", // Internet Control Message Protocol
             2 => "IGMP", // Internet Group Management Protocol
             4 => "IP-in-IP", // IP in IP (encapsulation)
-            41 => "IPv6", // IPv6 encapsulation
+            41 => "IPv6", // IPv6 Encapsulation
             50 => "ESP", // Encapsulating Security Payload [IPv6]
             58 => "ICMPv6", // ICMP for IPv6
             59 => "NoNxt", // No Next Header [IPv6]
@@ -721,11 +721,11 @@ pub mod sniffer {
 
     fn to_level_three_protocol(prot_num: u16) -> String {
         match prot_num {
-            0x0800 => "IPv4",
-            0x86DD => "IPv6",
+            0x0800 => "IPv4", // Internet Protocol version 4
+            0x86DD => "IPv6", // Internet Protocol version 6
 
             // No Ports
-            0x0806 => "ARP",
+            0x0806 => "ARP", // Address Resolution Protocol
             0x8035 => "RARP", // Reverse ARP
 
             // No IP Addresses, No Ports
