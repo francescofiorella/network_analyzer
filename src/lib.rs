@@ -577,14 +577,19 @@ pub mod sniffer {
 
     fn to_transported_protocol(prot_num: u8) -> String {
         match prot_num {
-            1 => "ICMP",
-            2 => "IGMP",
-            4 => "IP-in-IP", // IP in IP (encapsulation)
+            // 0, 43, 44, 51, 60, 135 have already been managed (SHOULD NOT BE POSSIBLE)
             6 => "TCP",
             17 => "UDP",
+
+            // No Ports
+            1 => "ICMP", // Internet Control Message Protocol
+            2 => "IGMP", // Internet Group Management Protocol
+            // 3 => "GGP", // Gateway-to-Gateway Protocol - Can't find
+            4 => "IP-in-IP", // IP in IP (encapsulation)
+            // 5 => "ST", // Internet Stream Protocol - Can't find
             41 => "IPv6", // IPv6 encapsulation
             50 => "ESP", // Encapsulating Security Payload [IPv6]
-            58 => "ICMPv6",
+            58 => "ICMPv6", // ICMP for IPv6
             59 => "NoNxt", // No Next Header [IPv6]
             _ => "Unknown"
         }.to_string()
