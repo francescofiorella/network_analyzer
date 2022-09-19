@@ -184,7 +184,7 @@ pub mod sniffer {
         m: Arc<Mutex<(NAState, Vec<NAPacket>, Vec<Stats>)>>,
         pub jh: JoinHandle<()>,
         cv: Arc<Condvar>,
-        report_file_name: String,
+        report_file_name: (String, String),
         tui_handler: (Option<Window>, bool, Option<Window>),
     }
 
@@ -200,7 +200,7 @@ pub mod sniffer {
                 couple.push((index as u8 + 1 , device));
             }
             let device = match couple.into_iter().find(|c| c.0 == adapter) {
-                Some((index, dev)) => dev,
+                Some((_, dev)) => dev,
                 None => return Err(NAError::new("Device not found")),
             };
 
@@ -242,7 +242,7 @@ pub mod sniffer {
                     let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
-                            mg.2 = produce_report(report_file_name_cl_2.clone(), mg.1.clone(), mg.2.clone());
+                            mg.2 = produce_report(report_file_name_cl_2.0.clone(), report_file_name_cl_2.1.clone(), mg.1.clone(), mg.2.clone());
                             mg.1 = Vec::new();
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
@@ -337,7 +337,7 @@ pub mod sniffer {
                 }
 
                 let mut mg = m_cl.lock().unwrap();
-                mg.2 = produce_report(report_file_name_cl.clone(), mg.1.clone(), mg.2.clone());
+                mg.2 = produce_report(report_file_name_cl.0.clone(), report_file_name_cl.1.clone(), mg.1.clone(), mg.2.clone());
 
                 // change the mutex, just in case of internal error
                 mg.0 = STOPPED;
@@ -355,7 +355,7 @@ pub mod sniffer {
 
             print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
-            mg.2 = produce_report(self.report_file_name.clone(), mg.1.clone(), mg.2.clone());
+            mg.2 = produce_report(self.report_file_name.0.clone(), self.report_file_name.1.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
         }
 
@@ -792,7 +792,7 @@ pub mod sniffer {
         }
     }
 
-    fn produce_report(file_name: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
+    fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
         fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
             for packet in packets {
                 // controlla il socket del pacchetto
@@ -826,57 +826,80 @@ pub mod sniffer {
         }
         // define the path
         let vec = produce_stats(stats, packets);
+
         // crea il file o tronca al byte 0 se il file esiste già
-        let mut report = File::create(file_name.clone()).unwrap(); // returns a Result
+        let mut report_md = File::create(file_name_md.clone()).unwrap(); // returns a Result
+        let mut report_xml = File::create(file_name_xml.clone()).unwrap();
+
         // scrivi le stringhe nel report
-        writeln!(report).expect("Unable to write the report file!");
-        writeln!(report, "# Sniffer report")
-            .expect("Unable to write the report file!");
-        writeln!(report).expect("Unable to write the report file!");
+        writeln!(report_md).expect("Unable to write the report file!");
+        writeln!(report_md, "# Sniffer report").expect("Unable to write the report file!");
+        writeln!(report_md).expect("Unable to write the report file!");
 
         if vec.is_empty() {
-            writeln!(report, "No traffic detected!")
-                .expect("Unable to write the report file!");
+            writeln!(report_md, "No traffic detected!").expect("Unable to write the report file!");
+            writeln!(report_xml, "No traffic detected!").expect("Unable to write the report file!");
             println!("Report produced!");
             return vec;
         }
 
         // HEADLINE
-        writeln!(report, "| First IP Address | First Port | Second IP Address | Second Port | Level Three Protocol | Transported Protocol | Bytes Transmitted | First Timestamp | Last Timestamp |")
+        writeln!(report_md, "| First IP Address | First Port | Second IP Address | Second Port | Level Three Protocol | Transported Protocol | Bytes Transmitted | First Timestamp | Last Timestamp |")
             .expect("Unable to write the report file!");
-        writeln!(report, "|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|")
+        writeln!(report_md, "|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|")
             .expect("Unable to write the report file!");
+        writeln!(report_xml, "<report>").expect("Unable to write the report file!");
 
         for stat in vec.clone() {
+
             // write the first ip address
-            write!(report, "| {} ", option_to_string(stat.sockets[0].0.clone()))
-                .expect("Unable to write the report file!");
+            let first_ip = option_to_string(stat.sockets[0].0.clone());
+            write!(report_md, "| {} ", first_ip).expect("Unable to write the report file!");
+            write!(report_xml, "<data_flow>").expect("Unable to write the report file!");;
+            write!(report_xml, "<first_ip>{}</first_ip>", first_ip).expect("Unable to write the report file!");
+
             // write the first port
-            write!(report, "| {} ", option_to_string(stat.sockets[0].1))
-                .expect("Unable to write the report file!");
+            let first_port = option_to_string(stat.sockets[0].1);
+            write!(report_md, "| {} ", first_port).expect("Unable to write the report file!");
+            write!(report_xml, "<first_port>{}</first_port>", first_port).expect("Unable to write the report file!");
+
             // write the second ip address
-            write!(report, "| {} ", option_to_string(stat.sockets[1].0.clone()))
-                .expect("Unable to write the report file!");
+            let second_ip = option_to_string(stat.sockets[1].0.clone());
+            write!(report_md, "| {} ", second_ip).expect("Unable to write the report file!");
+            write!(report_xml, "<second_ip>{}</second_ip>", second_ip).expect("Unable to write the report file!");
+
             // write the second port
-            write!(report, "| {} ", option_to_string(stat.sockets[1].1))
-                .expect("Unable to write the report file!");
+            let second_port = option_to_string(stat.sockets[1].1);
+            write!(report_md, "| {} ", second_port).expect("Unable to write the report file!");
+            write!(report_xml, "<second_port>{}</second_port>", second_port).expect("Unable to write the report file!");
+
             // write the l3 protocol
-            write!(report, "| {} ", stat.l3_protocol)
-                .expect("Unable to write the report file!");
+            write!(report_md, "| {} ", stat.l3_protocol).expect("Unable to write the report file!");
+            write!(report_xml, "<l3_prot>{}</l3_prot>", stat.l3_protocol).expect("Unable to write the report file!");
+
             // write the transported protocol
-            write!(report, "| {} ", option_to_string(stat.transported_protocol.clone()))
-                .expect("Unable to write the report file!");
+            let transp_prot = option_to_string(stat.transported_protocol.clone());
+            write!(report_md, "| {} ", transp_prot).expect("Unable to write the report file!");
+            write!(report_xml, "<transp_prot>{}</transp_prot>", transp_prot).expect("Unable to write the report file!");
+
             // write the total number of bytes
-            write!(report, "| {} ", stat.total_bytes)
-                .expect("Unable to write the report file!");
+            write!(report_md, "| {} ", stat.total_bytes).expect("Unable to write the report file!");
+            write!(report_xml, "<total_bytes>{}</total_bytes>", stat.total_bytes).expect("Unable to write the report file!");
+
             // write the first timestamp
-            write!(report, "| {} ", stat.first_timestamp)
-                .expect("Unable to write the report file!");
+            write!(report_md, "| {} ", stat.first_timestamp).expect("Unable to write the report file!");
+            write!(report_xml, "<first_ts>{}</first_ts>", stat.first_timestamp).expect("Unable to write the report file!");
+
             // write the last timestamp
-            write!(report, "| {} |", stat.last_timestamp)
-                .expect("Unable to write the report file!");
-            writeln!(report).expect("Unable to write the report file!");
+            write!(report_md, "| {} |", stat.last_timestamp).expect("Unable to write the report file!");
+            write!(report_xml, "<last_ts>{}</last_ts>", stat.first_timestamp).expect("Unable to write the report file!");
+
+            write!(report_xml, "</data_flow>").expect("Unable to write the report file!");
+            writeln!(report_md).expect("Unable to write the report file!");
+            writeln!(report_xml).expect("Unable to write the report file!");
         }
+
+        write!(report_xml, "</report>").expect("Unable to write the report file!");;
         println!("Report produced!");
         vec
     }
@@ -884,12 +907,17 @@ pub mod sniffer {
     mod format {
         use std::fmt::Display;
 
-        pub fn get_file_name(mut string: String) -> String {
-            string = string.trim().to_string();
-            if !string.ends_with(".md") {
-                string.push_str(".md");
+        pub fn get_file_name(string: String) -> (String, String) {
+            let mut string_md = string.trim().to_string();
+            let mut string_xml = string.trim().to_string();
+
+            if !string_md.ends_with(".md") {
+                string_md.push_str(".md");
             }
-            string
+            if !string_xml.ends_with(".xml") {
+                string_xml.push_str(".xml");
+            }
+            (string_md, string_xml)
         }
 
         pub fn option_to_string<T: Display>(opt: Option<T>) -> String {
