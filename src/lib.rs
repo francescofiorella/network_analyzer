@@ -6,6 +6,7 @@ pub mod sniffer {
     use std::fs::File;
     use std::io::{stdin, Write};
     use std::net::{Ipv4Addr, Ipv6Addr};
+    use std::process::Command;
     use pcap::{Capture, Device, Packet};
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
@@ -47,6 +48,11 @@ pub mod sniffer {
 
     fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
         //screen initialization
+        if cfg!(target_os = "macos") {
+            Command::new("/usr/X11/bin/resize").arg("-s").arg("43").arg("80").output();
+        }else if cfg!(target_os="linux"){
+            Command::new("resize").arg("-s").arg("43").arg("80").output();
+        }
         let window = initscr();
         start_color();
         init_pair(1, COLOR_WHITE, COLOR_BLACK);
@@ -56,9 +62,7 @@ pub mod sniffer {
         init_pair(5, COLOR_BLUE, COLOR_BLACK);
 
         //screen settings
-        if cfg!(target_os = "macos") {
-            resize_term(0,0);
-        } else if cfg!(target_os = "linux") {
+        if cfg!(target_os = "linux") {
             resize_term(0, 0);
         } else {
             resize_term(42, 80);
