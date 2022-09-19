@@ -508,7 +508,7 @@ pub mod sniffer {
         destination_port: Option<u16>, // 36 - 37
 
         timestamp: u128,
-        other: String,
+        other: Option<String>,
     }
 
     fn to_mac_address(p: &Packet, start: usize) -> String {
@@ -567,11 +567,66 @@ pub mod sniffer {
 
     fn to_level_three_protocol(prot_num: u16) -> String {
         match prot_num {
-            2048 => "IPv4", // 0x0800
-            2054 => "ARP", // 0x0806
-            34525 => "IPv6", // 0x86dd
-            33024 => "IEEE 802.1Q", // 0x8100
-            35041 => "HomePlug AV", // 0x88e1
+            0x0800 => "IPv4",
+            0x86DD => "IPv6",
+
+            // No Ports
+            0x0806 => "ARP",
+            0x8035 => "RARP", // Reverse ARP
+
+            // No IP Addresses, No Ports
+            0x0842 => "WOL", // Wake-on-Lan
+            0x22F0 => "AVTP", // Audio Video Transport Protocol
+            0x22F3 => "TRILL", // IETF TRILL Protocol
+            0x22EA => "SRP", // Stream Reservation Protocol
+            0x6002 => "MOP", // DEC MOP RC
+            0x6003 => "DECnet", // DECnet Phase IV, DNA Routing
+            0x6004 => "LAT", // DEC LAT
+            0x809B => "Ethertalk", // AppleTalk Ethertalk
+            0x80F3 => "AARP", // AppleTalk ARP
+            0x8100 => "IEEE 802.1Q",
+            0x8102 => "SLPP", // Simple Loop Prevention Protocol
+            0x8103 => "VLACP", // Virtual Link Aggregation Control Protocol
+            0x8137 => "IPX", // Internetwork Packet Exchange (It has addresses, but not IP)
+            0x8204 => "QNX Qnet", // QNX Qnet
+            0x8808 => "EFC", // Ethernet Flow Control
+            0x8809 => "LACP", // Link Aggregation Control Protocol
+            0x8819 => "CobraNet",
+            0x8847 => "MPLS U", // Multiprotocol Label Switching Unicast
+            0x8848 => "MPLS M", // MPLS Multicast
+            0x8863 => "PPPoE DS", // Point-to-Point Protocol over Ethernet Discovery Stage
+            0x8864 => "PPPoE SS", // PPPoE Session Stage
+            0x887B => "HomePlug 1.0 MME",
+            0x888E => "EAPoL", // EAP over LAN (IEEE 802.1X)
+            0x8892 => "PROFINET",
+            0x889A => "SCSIoE", // HyperSCSI (SCSI over Ethernet)
+            0x88A2 => "ATAoE", // ATA over Ethernet
+            0x88A4 => "EtherCAT", // Ethernet for Control Automation Technology Protocol
+            0x88A8 => "IEEE 802.1ad", // Service VLAN tag identifier (S-Tag) on Q-in-Q tunnel.
+            0x88AB => "Ethernet Powerlink",
+            0x88B8 => "GOOSE", // Generic Object Oriented Substation Event
+            0x88B9 => "GSE", // Generic Substation Events Management Services
+            0x88BA => "SV", // Sampled Value Transmission
+            0x88BF => "RoMON", // MikroTik RoMON
+            0x88CC => "LLDP", // Link Layer Discovery Protocol
+            0x88CD => "SERCOS III",
+            0x88E1 => "HomePlug Green PHY",
+            0x88E3 => "MRP", // Media Redundancy Protocol (IEC62439-2)
+            0x88E5 => "MACsec", // IEEE 802.1AE MAC security
+            0x88E7 => "PBB", // Provider Backbone Bridges (IEEE 802.1ah)
+            0x88F7 => "PTP", // Precision Time Protocol over IEEE 802.3 Ethernet
+            0x88F8 => "NC-SI", // Network Controller Sideband Interface
+            0x88FB => "PRP", // Parallel Redundancy Protocol
+            0x8902 => "CFM/OAM", // IEEE 802.1ag Connectivity Fault Management Protocol / ITU-T Recommendation Y.1731
+            0x8906 => "FCoE", // Fibre Channel over Ethernet
+            0x8914 => "FCoE IP", // FCoE Initialization Protocol
+            0x8915 => "RoCE", // RDMA over Converged Ethernet
+            0x891D => "TTE", // TTEthernet Protocol Control Frame
+            0x893a => "IEEE 1905",
+            0x892F => "HSR", // High-availability Seamless Redundancy
+            0x9000 => "ECTP", // Ethernet Configuration Testing Protocol
+            0xF1C1 => "TSN", // Redundancy Tag (IEEE 802.1CB Frame Replication and Elimination for Reliability)
+
             _ => "Unknown"
         }.to_string()
     }
@@ -597,38 +652,47 @@ pub mod sniffer {
             let mut transported_protocol = None;
             let mut source_port = None;
             let mut destination_port = None;
+            let mut other = None;
             let eth_type = to_u16(&pcap_packet, 12);
             match eth_type {
                 // IPv4
-                2048 => {
+                0x0800 => {
                     source_address = Some(to_ip_address(&pcap_packet, 26));
                     destination_address = Some(to_ip_address(&pcap_packet, 30));
 
                     let prot_num = pcap_packet[23];
                     transported_protocol = Some(to_transported_protocol(prot_num));
-                    if prot_num == 6 || prot_num == 17 {
+                    if prot_num == 6 || prot_num == 17 { // TCP o UDP
                         source_port = Some(to_u16(&pcap_packet, 34));
                         destination_port = Some(to_u16(&pcap_packet, 36));
                     }
                 },
                 // IPv6
-                34525 => {
+                0x86DD => {
                     source_address = Some(to_ipv6_address(&pcap_packet, 22));
                     destination_address = Some(to_ipv6_address(&pcap_packet, 38));
 
                     let (prot, port_index) = get_ipv6_transported_protocol(&pcap_packet, (20, 34));
                     transported_protocol = Some(prot.clone());
-                    if prot == "TCP".to_string() || prot == "UDP".to_string() {
+                    if prot == "TCP".to_string() || prot == "UDP".to_string() { // TCP o UDP
                         source_port = Some(to_u16(&pcap_packet, port_index));
                         destination_port = Some(to_u16(&pcap_packet, port_index + 2));
                     }
                 },
-                // ARP
-                2054 => {
+                // ARP | RARP
+                0x0806 | 0x8035 => {
                     // Sender IP
                     source_address = Some(to_ip_address(&pcap_packet, 28));
                     // Target IP
                     destination_address = Some(to_ip_address(&pcap_packet, 38));
+                    // Request / Reply
+                    other = match pcap_packet[21] {
+                        1 => Some("ARP Request".to_string()),
+                        2=> Some("ARP Reply".to_string()),
+                        3=> Some("RARP Request".to_string()),
+                        4=> Some("RARP Reply".to_string()),
+                        _ => None
+                    }
                 },
                 _ => ()
             }
@@ -644,10 +708,7 @@ pub mod sniffer {
                 source_port,
                 destination_port,
                 timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis(),
-                other: match eth_type {
-                    2054 => if pcap_packet[21] == 1 { "ARP Request" } else { "ARP Reply" }.to_string(), // ARP, OpCode byte 21 = 1 Request, 2 Reply
-                    _ => "".to_string()
-                }
+                other
             }
         }
 
