@@ -12,6 +12,7 @@ pub mod sniffer {
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, endwin, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
     use mac_address::MacAddress;
+    use rustc_serialize::hex;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -23,23 +24,43 @@ pub mod sniffer {
         //Actually available filters
         let f = filter.as_str();
         match f {
+
             "none" => Ok(Filter::None),
             "ipv4" => Ok(Filter::IPv4),
             "ipv6" => Ok(Filter::IPv6),
             "arp" => Ok(Filter::ARP),
+
+            //ipv4 addr
             string if string.contains('.') => {
                 let mut v = Vec::<&str>::new();
                 v = string.split('.').collect();
                 if v.len() == 4 {
                     for u8_block in v {
                         if u8_block.parse::<u8>().is_err() {
-                            return Err(NAError::new("Not an IP addr. as filter"))
+                            return Err(NAError::new("Not a valid IPv4 addr. as filter"))
                         }
                     }
                     return Ok(Filter::IP(string.to_string()))
                 }
                 return Err(NAError::new("Not an IP addr. as filter"))
             }
+
+            //ipv6 addr
+            string if string.contains(':') => {
+                let mut v = Vec::<&str>::new();
+                v = string.split(':').collect();
+                if v.len() <= 8 {
+                    for u16_block in v {
+                        if u16::from_str_radix(u16_block, 16).is_err() && !u16_block.is_empty(){
+                            return Err(NAError::new("Not a valid IPv6 addr. as filter"))
+                        }
+                    }
+                    return (Ok(Filter::IP(string.to_string())))
+                }
+                return Err(NAError::new("Not a valid IPv6 addr. as filter"))
+            }
+
+            //port
             string if string.parse::<u16>().is_ok() => Ok(Filter::Port(string.parse::<u16>().unwrap())),
             _ => Err(NAError::new("Unavailable filter")),
         }
@@ -242,7 +263,7 @@ pub mod sniffer {
                     let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
-                            mg.2 = produce_report(report_file_name_cl_2.0.clone(), report_file_name_cl_2.1.clone(), mg.1.clone(), mg.2.clone());
+                            mg.2 = produce_report(report_file_name_cl_2.0.clone(), report_file_name_cl_2.1.clone(), mg.1.clone(), mg.2.clone(), tui);
                             mg.1 = Vec::new();
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
@@ -337,7 +358,7 @@ pub mod sniffer {
                 }
 
                 let mut mg = m_cl.lock().unwrap();
-                mg.2 = produce_report(report_file_name_cl.0.clone(), report_file_name_cl.1.clone(), mg.1.clone(), mg.2.clone());
+                mg.2 = produce_report(report_file_name_cl.0.clone(), report_file_name_cl.1.clone(), mg.1.clone(), mg.2.clone(), tui);
 
                 // change the mutex, just in case of internal error
                 mg.0 = STOPPED;
@@ -355,7 +376,7 @@ pub mod sniffer {
 
             print_state(self.tui_handler.2.as_ref(), &(mg.0));
 
-            mg.2 = produce_report(self.report_file_name.0.clone(), self.report_file_name.1.clone(), mg.1.clone(), mg.2.clone());
+            mg.2 = produce_report(self.report_file_name.0.clone(), self.report_file_name.1.clone(), mg.1.clone(), mg.2.clone(), self.tui_handler.1);
             mg.1 = Vec::new();
         }
 
@@ -792,7 +813,7 @@ pub mod sniffer {
         }
     }
 
-    fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
+    fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>, tui: bool) -> Vec<Stats> {
         fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
             for packet in packets {
                 // controlla il socket del pacchetto
@@ -839,7 +860,9 @@ pub mod sniffer {
         if vec.is_empty() {
             writeln!(report_md, "No traffic detected!").expect("Unable to write the report file!");
             writeln!(report_xml, "No traffic detected!").expect("Unable to write the report file!");
-            println!("Report produced!");
+            if !tui {
+                println!("Report produced!");
+            }
             return vec;
         }
 
@@ -855,7 +878,7 @@ pub mod sniffer {
             // write the first ip address
             let first_ip = option_to_string(stat.sockets[0].0.clone());
             write!(report_md, "| {} ", first_ip).expect("Unable to write the report file!");
-            write!(report_xml, "<data_flow>").expect("Unable to write the report file!");;
+            write!(report_xml, "<data_flow>").expect("Unable to write the report file!");
             write!(report_xml, "<endpoint1_ip>{}</endpoint1_ip>", first_ip).expect("Unable to write the report file!");
 
             // write the first port
@@ -901,7 +924,9 @@ pub mod sniffer {
         }
 
         write!(report_xml, "</report>").expect("Unable to write the report file!");;
-        println!("Report produced!");
+        if !tui {
+            println!("Report produced!");
+        }
         vec
     }
 
