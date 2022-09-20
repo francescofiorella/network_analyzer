@@ -13,6 +13,7 @@ pub mod sniffer {
     use std::time::{Duration, SystemTime};
     use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, endwin, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
     use mac_address::MacAddress;
+    use pcap::Error::TimeoutExpired;
     use rustc_serialize::hex;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
@@ -56,7 +57,7 @@ pub mod sniffer {
                             return Err(NAError::new("Not a valid IPv6 addr. as filter"))
                         }
                     }
-                    return (Ok(Filter::IP(string.to_string())))
+                    return Ok(Filter::IP(string.to_string()))
                 }
                 return Err(NAError::new("Not a valid IPv6 addr. as filter"))
             }
@@ -70,9 +71,9 @@ pub mod sniffer {
     fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
         //screen initialization
         if cfg!(target_os = "macos") {
-            Command::new("/usr/X11/bin/resize").arg("-s").arg("43").arg("80").output();
-        }else if cfg!(target_os="linux"){
-            Command::new("resize").arg("-s").arg("43").arg("80").output();
+            Command::new("/usr/X11/bin/resize").arg("-s").arg("43").arg("80").output().unwrap();
+        } else if cfg!(target_os="linux"){
+            Command::new("resize").arg("-s").arg("43").arg("80").output().unwrap();
         }
         let window = initscr();
         start_color();
@@ -332,6 +333,15 @@ pub mod sniffer {
 
                             }
                             Err(e) => {
+                                if e == TimeoutExpired {
+                                    cap = Capture::from_device(device.clone())
+                                        .unwrap()
+                                        .timeout(10000)
+                                        .promisc(true)
+                                        .open()
+                                        .unwrap();
+                                    continue;
+                                }
                                 match tui {
                                     true => {
                                         sub4.as_ref().unwrap().clear();
@@ -939,7 +949,7 @@ pub mod sniffer {
                     false
                 },
                 Filter::Port(port) => {
-                    if self.source_port.is_some() && self.source_port.is_some() {
+                    if self.source_port.is_some() && self.destination_port.is_some() {
                         return port == self.source_port.unwrap() || port == self.destination_port.unwrap()
                     }
                     false
