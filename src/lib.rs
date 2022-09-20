@@ -47,7 +47,7 @@ pub mod sniffer {
 
             //ipv6 addr
             string if string.contains(':') => {
-                let v: Vec<&str> = string.split(':').collect();
+                let v : Vec<&str> = string.split(':').collect();
                 if v.len() <= 8 {
                     for u16_block in v {
                         if u16::from_str_radix(u16_block, 16).is_err() && !u16_block.is_empty(){
@@ -65,12 +65,26 @@ pub mod sniffer {
         }
     }
 
+    fn get_adapter(adapter: u8) -> Result<Device, NAError> {
+        let device_list = Device::list().unwrap();
+        let mut couple = Vec::<(u8, Device)>::new();
+        for (index, device) in device_list.into_iter().enumerate() {
+            couple.push((index as u8 + 1 , device));
+        }
+        let device = match couple.into_iter().find(|c| c.0 == adapter) {
+            Some((_, dev)) => dev,
+            None => return Err(NAError::new("Device not found")),
+        };
+
+        Ok(device)
+    }
+
     fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
         //screen initialization
         if cfg!(target_os = "macos") {
-            Command::new("/usr/X11/bin/resize").arg("-s").arg("43").arg("80").output().unwrap();
+            Command::new("/usr/X11/bin/resize").arg("-s").arg("43").arg("80").output().expect("Error while calling resize command");
         } else if cfg!(target_os="linux"){
-            Command::new("resize").arg("-s").arg("43").arg("80").output().unwrap();
+            Command::new("resize").arg("-s").arg("43").arg("80").output().expect("Error while calling resize command");
         }
         let window = initscr();
         start_color();
@@ -308,7 +322,6 @@ pub mod sniffer {
                                     mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
                                     cap = Capture::from_device(device.clone())
                                         .unwrap()
-                                        .timeout(10000)
                                         .promisc(true)
                                         .open()
                                         .unwrap();
@@ -347,7 +360,7 @@ pub mod sniffer {
                                         sub4.as_ref().unwrap().printw("Press any key to quit");
                                         sub4.as_ref().unwrap().refresh();
                                         //to make the error visible
-                                        sleep(Duration::from_secs(2));
+                                        //sleep(Duration::from_secs(2));
                                     }
                                     false => println!("ERROR: {}", e),
                                 }
@@ -973,23 +986,6 @@ pub mod sniffer {
     }
 
     impl Error for NAError {}
-
-
-    pub fn list_adapters() -> Result<String, NAError> {
-        let mut dev_names = String::new();
-        let devices = match Device::list() {
-            Ok(vec) => vec,
-            Err(_) => return Err(NAError::new("Error while searching for network adapters"))
-        };
-
-        devices.into_iter().for_each(|dev| {
-            dev_names.push_str(dev.name.as_str());
-            dev_names.push('\n');
-        });
-
-        Ok(dev_names)
-    }
-
 
     #[derive(Debug, Clone)]
     struct Stats {
