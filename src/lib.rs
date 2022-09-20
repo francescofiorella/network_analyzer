@@ -237,7 +237,7 @@ pub mod sniffer {
         }
 
         impl NAPacket {
-            pub fn new(pcap_packet: Packet) -> Self {
+            pub(crate) fn new(pcap_packet: Packet) -> Self {
                 let mut source_address = None;
                 let mut destination_address = None;
                 let mut transported_protocol = None;
@@ -324,7 +324,7 @@ pub mod sniffer {
                 s
             }
 
-            pub fn filter(&self, filter: Filter) -> bool {
+            pub(crate) fn filter(&self, filter: Filter) -> bool {
                 match filter {
                     Filter::None => true,
                     Filter::IPv4 if self.level_three_type == "IPv4" => true,
@@ -352,7 +352,7 @@ pub mod sniffer {
             use mac_address::MacAddress;
             use crate::sniffer::format::to_u16;
 
-            pub fn to_mac_address(p: &[u8], start: usize) -> String {
+            pub(crate) fn to_mac_address(p: &[u8], start: usize) -> String {
                 MacAddress::new([
                     p[start],
                     p[start + 1],
@@ -363,7 +363,7 @@ pub mod sniffer {
                 ]).to_string()
             }
 
-            pub fn to_ip_address(p: &[u8], start: usize) -> String {
+            pub(crate) fn to_ip_address(p: &[u8], start: usize) -> String {
                 Ipv4Addr::new(
                     p[start],
                     p[start + 1],
@@ -372,7 +372,7 @@ pub mod sniffer {
                 ).to_string()
             }
 
-            pub fn to_ipv6_address(p: &[u8], start: usize) -> String {
+            pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String {
                 Ipv6Addr::new(
                     to_u16(p, start),
                     to_u16(p, start + 2),
@@ -385,7 +385,7 @@ pub mod sniffer {
                 ).to_string()
             }
 
-            pub fn to_transported_protocol(prot_num: u8) -> String {
+            pub(crate) fn to_transported_protocol(prot_num: u8) -> String {
                 match prot_num {
                     // 0, 43, 44, 51, 60, 135 have already been managed (SHOULD NOT BE POSSIBLE)
                     6 => "TCP", // Transmission Control Protocol
@@ -529,7 +529,7 @@ pub mod sniffer {
                 }.to_string()
             }
 
-            pub fn to_level_three_protocol(prot_num: u16) -> String {
+            pub(crate) fn to_level_three_protocol(prot_num: u16) -> String {
                 match prot_num {
                     0x0800 => "IPv4", // Internet Protocol version 4
                     0x86DD => "IPv6", // Internet Protocol version 6
@@ -595,7 +595,7 @@ pub mod sniffer {
                 }.to_string()
             }
 
-            pub fn get_ipv6_transported_protocol(p: &[u8], (next_header_index, remaining_size): (usize, usize)) -> (String, usize) {
+            pub(crate) fn get_ipv6_transported_protocol(p: &[u8], (next_header_index, remaining_size): (usize, usize)) -> (String, usize) {
                 let new_start = next_header_index + remaining_size;
                 match p[next_header_index] {
                     // Hop-by-Hop Options | Routing | Destination Options | Mobility
@@ -621,7 +621,7 @@ pub mod sniffer {
         }
 
         impl NAError {
-            pub fn new(msg: &str) -> Self { NAError { message: msg.to_string() } }
+            pub(crate) fn new(msg: &str) -> Self { NAError { message: msg.to_string() } }
         }
 
         impl Display for NAError {
@@ -715,7 +715,7 @@ pub mod sniffer {
         use std::io::Write;
 
         #[derive(Debug, Clone)]
-        pub struct Stats {
+        pub(crate) struct Stats {
             sockets: [(Option<String>, Option<u16>); 2],
             l3_protocol: String,
             transported_protocol: Option<String>,
@@ -725,7 +725,7 @@ pub mod sniffer {
         }
 
         impl Stats {
-            pub fn new(packet: NAPacket) -> Self {
+            pub(crate) fn new(packet: NAPacket) -> Self {
                 Stats {
                     sockets: [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
                     l3_protocol: packet.level_three_type,
@@ -737,7 +737,7 @@ pub mod sniffer {
             }
         }
 
-        pub fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
+        pub(crate) fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
             fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
                 for packet in packets {
                     // controlla il socket del pacchetto
@@ -879,7 +879,7 @@ pub mod sniffer {
     mod format {
         use std::fmt::Display;
 
-        pub fn get_file_name(string: String) -> (String, String) {
+        pub(crate) fn get_file_name(string: String) -> (String, String) {
             let mut string_md = string.trim().to_string();
             let mut string_xml = string.trim().to_string();
 
@@ -892,14 +892,14 @@ pub mod sniffer {
             (string_md, string_xml)
         }
 
-        pub fn option_to_string<T: Display>(opt: Option<T>) -> String {
+        pub(crate) fn option_to_string<T: Display>(opt: Option<T>) -> String {
             match opt {
                 Some(num) => num.to_string(),
                 None => String::from("None")
             }
         }
 
-        pub fn to_u16(p: &[u8], start: usize) -> u16 {
+        pub(crate) fn to_u16(p: &[u8], start: usize) -> u16 {
             let param1: u16 = p[start] as u16 * 256;
             let param2 = p[start + 1] as u16;
             param1 + param2
@@ -912,7 +912,7 @@ pub mod sniffer {
         use crate::sniffer::na_packet::NAPacket;
         use crate::sniffer::na_state::NAState;
 
-        pub struct SnifferChannel {
+        pub(crate) struct SnifferChannel {
             senders: Vec<Sender<(Option<NAError>, Option<NAState>, Option<NAPacket>)>>
         }
 
