@@ -74,6 +74,7 @@ pub mod sniffer {
                         }
                         Ok(mut mg) if mg.0.is_paused() => {
                             mg = cv_cl_2.wait_while(mg, |mg| !mg.0.is_resumed()).unwrap();
+                            drop(mg);
                             continue;
                         }
                         _ => break
@@ -107,6 +108,7 @@ pub mod sniffer {
                                         .promisc(true)
                                         .open()
                                         .unwrap();
+                                    drop(mg);
                                     continue;
                                 } else if mg.0.is_stopped() {
                                     break;
@@ -148,6 +150,7 @@ pub mod sniffer {
                     } else {
                         break;
                     }
+                    drop(mg);
                 }
 
                 let mut mg = m_cl.lock().unwrap();
