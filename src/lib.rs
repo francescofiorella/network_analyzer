@@ -11,10 +11,9 @@ pub mod sniffer {
     use std::sync::{Arc, Condvar, Mutex};
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::{Duration, SystemTime};
-    use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, endwin, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+    use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
     use mac_address::MacAddress;
     use pcap::Error::TimeoutExpired;
-    use rustc_serialize::hex;
     use crate::sniffer::format::{get_file_name, option_to_string};
     use crate::sniffer::NAState::{PAUSED, RESUMED, STOPPED};
 
@@ -34,8 +33,7 @@ pub mod sniffer {
 
             //ipv4 addr
             string if string.contains('.') => {
-                let mut v = Vec::<&str>::new();
-                v = string.split('.').collect();
+                let v: Vec<&str> = string.split('.').collect();
                 if v.len() == 4 {
                     for u8_block in v {
                         if u8_block.parse::<u8>().is_err() {
@@ -49,8 +47,7 @@ pub mod sniffer {
 
             //ipv6 addr
             string if string.contains(':') => {
-                let mut v = Vec::<&str>::new();
-                v = string.split(':').collect();
+                let v: Vec<&str> = string.split(':').collect();
                 if v.len() <= 8 {
                     for u16_block in v {
                         if u16::from_str_radix(u16_block, 16).is_err() && !u16_block.is_empty(){
@@ -1127,7 +1124,7 @@ pub mod sniffer {
             writeln!(report_xml).expect("Unable to write the report file!");
         }
 
-        write!(report_xml, "</report>").expect("Unable to write the report file!");;
+        write!(report_xml, "</report>").expect("Unable to write the report file!");
         if !tui {
             println!("Report produced!");
         }
