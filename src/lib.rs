@@ -80,9 +80,10 @@ pub mod sniffer {
                         _ => break
                     }
                 }
+                println!("Timer thread exiting")
             });
 
-            let operation_thread = spawn(move || {
+            let sniffing_thread = spawn(move || {
                 let mut cap = Capture::from_device(device.clone())
                     .unwrap()
                     .timeout(5000)
@@ -154,16 +155,15 @@ pub mod sniffer {
                 }
 
                 let mut mg = m_cl.lock().unwrap();
+                mg.0 = STOPPED;
                 mg.2 = produce_report(report_file_name_cl.0.clone(), report_file_name_cl.1.clone(), mg.1.clone(), mg.2.clone());
 
-                // change the mutex, just in case of internal error
-                mg.0 = STOPPED;
                 cv_cl.notify_all();
 
                 println!("Sniffing thread exiting");
             });
 
-            Ok(Sniffer { m, jh: Some((operation_thread, timer_thread)), cv, report_file_name })
+            Ok(Sniffer { m, jh: Some((sniffing_thread, timer_thread)), cv, report_file_name })
         }
 
         pub fn pause(&mut self) {
@@ -786,7 +786,7 @@ pub mod sniffer {
 
             if vec.is_empty() {
                 writeln!(report_md, "No traffic detected!").expect("Unable to write the report file!");
-                writeln!(report_xml, "No traffic detected!").expect("Unable to write the report file!");
+                writeln!(report_xml, "<report>No traffic detected!</report>").expect("Unable to write the report file!");
                 /*if !tui {
                     println!("Report produced!");
                 }*/

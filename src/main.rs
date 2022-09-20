@@ -43,8 +43,8 @@ fn notui_show_commands() {
         Starting sniffing...";
 
     println!("{}", commands);
-
     sleep(Duration::from_secs(3));
+    println!("{}", RUN);
 }
 
 fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
@@ -240,22 +240,28 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>) {
 fn notui_event_handler(sniffer: &mut Sniffer) {
     //event loop
     loop {
-        if !sniffer.get_state().is_stopped() {
-            let mut cmd = String::new();
-            stdin().read_line(&mut cmd).unwrap();
-            if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'p' {
-                sniffer.pause();
-            } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'r' {
-                sniffer.resume();
-            } else if cmd.chars().nth(0).unwrap().to_ascii_lowercase() == 'q' {
+        if sniffer.get_state().is_stopped() {
+            break;
+        }
+
+        let mut cmd = String::new();
+        stdin().read_line(&mut cmd).unwrap();
+
+        if sniffer.get_state().is_stopped() {
+            break;
+        }
+
+        match cmd.chars().nth(0).unwrap().to_ascii_lowercase() {
+            'p' => sniffer.pause(),
+            'r' => sniffer.resume(),
+            'q' => {
                 sniffer.stop();
                 break;
-            } else {
+            }
+            _ => {
                 println!("Undefined command!");
                 continue;
             }
-        } else {
-            break;
         }
     }
 }
@@ -279,8 +285,6 @@ fn main() {
         let mut main_window = None;
 
         if tui_enabled {
-            // modificare args.adapter in device_name
-            // args.filter in enum_filter
             let device_name = get_adapter(args.adapter).ok().unwrap().name;
             let filter = get_filter(&args.filter.to_ascii_lowercase()).ok().unwrap();
             main_window = Some(tui_init(&device_name, &filter, &args.output, args.update_time));
@@ -316,19 +320,20 @@ fn main() {
                             sub4.as_ref().unwrap().refresh();
                         } else {
                             println!("ERROR: {}", err);
+                            println!("Press any key + \"Enter\" to quit")
                         }
+                        break;
                     }
                     Ok((_, Some(state), _)) => {
                         print_state(state_window.as_ref(), &state);
-                        if state.is_stopped() { break }
+                        if state.is_stopped() { break; }
                     }
-                    Ok((_, _, Some(packet))) => {
-                        print_packet(packet, sub4.as_ref());
-                    }
+                    Ok((_, _, Some(packet))) => print_packet(packet, sub4.as_ref()),
                     Ok(_) => continue, // Should not be possible
                     Err(_) => break
                 }
             }
+            println!("Observer thread exiting")
         });
 
         // Event Handler
