@@ -357,8 +357,8 @@ pub mod sniffer {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
                     let format =
                         self.to_string_mac().as_str().to_owned() + "\n" +
-                            self.to_string_source_socket().as_str() + "\n" +
-                            self.to_string_dest_socket().as_str() + "\n" +
+                            self.to_string_endpoints().as_str() + "\n" +
+                            self.to_string_ports().as_str() + "\n" +
                             self.info().as_str() + "\n"
                         ;
                     write!(f, "{}", format)
