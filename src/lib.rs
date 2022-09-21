@@ -76,7 +76,7 @@ pub mod sniffer {
                         _ => break
                     }
                 }
-                println!("Timer thread exiting")
+                //println!("Timer thread exiting")
             });
 
             let sniffing_thread = spawn(move || {
@@ -155,7 +155,7 @@ pub mod sniffer {
 
                 cv_cl.notify_all();
 
-                println!("Sniffing thread exiting");
+                //println!("Sniffing thread exiting");
             });
 
             Ok(Sniffer { m, jh: Some((sniffing_thread, timer_thread)), cv, report_file_name })

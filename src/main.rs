@@ -115,6 +115,7 @@ fn state_win_init() -> Window {
 
 pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
     if tui_window.is_some() {
+        tui_window.as_ref().unwrap().attron(A_BOLD);
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(2));
         tui_window.as_ref().as_ref().unwrap().printw(p.to_string_mac());
         tui_window.as_ref().as_ref().unwrap().printw("\n");
@@ -130,6 +131,7 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
         tui_window.as_ref().unwrap().attroff(COLOR_PAIR(5));
         tui_window.as_ref().as_ref().unwrap().printw("\n");
         tui_window.as_ref().as_ref().unwrap().printw("\n");
+        tui_window.as_ref().unwrap().attroff(A_BOLD);
         tui_window.as_ref().as_ref().unwrap().refresh();
     } else {
         println!("{}", p);
@@ -165,7 +167,9 @@ fn enable_commands(sniffer: &mut Sniffer, sub1: Option<Window>, tui: bool) {
         }
     }
 
-    println!("Closing event handler loop");
+    if !tui {
+        println!("Closing event handler loop");
+    }
 }
 
 fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>) {
@@ -337,7 +341,9 @@ fn main() {
                     Err(_) => break
                 }
             }
-            println!("Observer thread exiting")
+            if !tui_enabled {
+                println!("Observer thread exiting");
+            }
         });
 
         // Event Handler
