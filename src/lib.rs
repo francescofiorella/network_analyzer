@@ -43,12 +43,8 @@ pub mod sniffer {
             let report_file_name_cl = report_file_name.clone();
             let report_file_name_cl_2 = report_file_name.clone();
 
-            let device = get_adapter(adapter).unwrap();
-
-            let enum_filter = match get_filter(&filter.to_ascii_lowercase()) {
-                Ok(f) => f,
-                Err(e) => return Err(e),
-            };
+            let device = get_adapter(adapter)?;
+            let enum_filter = get_filter(&filter.to_ascii_lowercase())?;
 
             let sniffer_channel = SnifferChannel::new();
 
@@ -91,7 +87,6 @@ pub mod sniffer {
                     .open()
                     .unwrap();
 
-                //println!("****** SNIFFING STARTED ******");
                 loop {
                     let mut mg = m_cl.lock().unwrap();
                     if mg.0.is_resumed() {
@@ -118,7 +113,7 @@ pub mod sniffer {
                                 let p = NAPacket::new(packet.clone());
 
                                 if p.filter(enum_filter.clone()) {
-                                    mg.3.send((None, None, Some(p.clone())));
+                                    mg.3.send((Message::Packet(p.clone())));
                                     mg.1.push(p);
                                 }
                             }
@@ -135,7 +130,7 @@ pub mod sniffer {
 
                                 // send the error to the ui
                                 let mut mg = m_cl.lock().unwrap();
-                                mg.3.send((Some(NAError::new(&e.to_string())), None, None));
+                                mg.3.send(Message::Error(NAError::new(&e.to_string())));
                                 break;
                             }
                         }
@@ -169,7 +164,7 @@ pub mod sniffer {
         pub fn pause(&mut self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = PAUSED;
-            mg.3.send((None, Some(PAUSED), None));
+            mg.3.send((Message::State(PAUSED)));
             mg.2 = produce_report(self.report_file_name.0.clone(), self.report_file_name.1.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
         }
@@ -177,18 +172,18 @@ pub mod sniffer {
         pub fn resume(&mut self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = RESUMED;
-            mg.3.send((None, Some(RESUMED), None));
+            mg.3.send((Message::State(RESUMED)));
             self.cv.notify_all();
         }
 
         pub fn stop(&mut self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = STOPPED;
-            mg.3.send((None, Some(STOPPED), None));
+            mg.3.send((Message::State(STOPPED)));
             self.cv.notify_all();
         }
 
-        pub fn subscribe(&mut self) -> Receiver<(Option<NAError>, Option<NAState>, Option<NAPacket>)> {
+        pub fn subscribe(&mut self) -> Receiver<Message> {
             let mut mg = self.m.lock().unwrap();
             mg.3.subscribe()
         }
@@ -206,7 +201,15 @@ pub mod sniffer {
         }
     }
 
+    #[derive(Clone)]
+    pub enum Message {
+        Error(NAError),
+        State(NAState),
+        Packet(NAPacket),
+    }
+
     pub mod na_packet {
+        use std::fmt::{Display, Formatter};
         use std::time::SystemTime;
         use pcap::Packet;
         use crate::sniffer::filter::Filter;
@@ -349,6 +352,20 @@ pub mod sniffer {
                 }
             }
         }
+
+        impl Display for NAPacket {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                    let format =
+                        self.to_string_mac().as_str().to_owned() + "\n" +
+                            self.to_string_source_socket().as_str() + "\n" +
+                            self.to_string_dest_socket().as_str() + "\n" +
+                            self.info().as_str() + "\n"
+                        ;
+                    write!(f, "{}", format)
+            }
+        }
+
+
 
         mod protocols {
             use std::net::{Ipv4Addr, Ipv6Addr};
@@ -911,12 +928,13 @@ pub mod sniffer {
 
     mod channel {
         use std::sync::mpsc::{channel, Receiver, Sender};
+        use crate::sniffer::Message;
         use crate::sniffer::na_error::NAError;
         use crate::sniffer::na_packet::NAPacket;
         use crate::sniffer::na_state::NAState;
 
         pub(crate) struct SnifferChannel {
-            senders: Vec<Sender<(Option<NAError>, Option<NAState>, Option<NAPacket>)>>
+            senders: Vec<Sender<Message>>
         }
 
         impl SnifferChannel {
@@ -924,13 +942,13 @@ pub mod sniffer {
                 SnifferChannel { senders: Vec::new() }
             }
 
-            pub(crate) fn subscribe(&mut self) -> Receiver<(Option<NAError>, Option<NAState>, Option<NAPacket>)> {
-                let (sx, rx) = channel::<(Option<NAError>, Option<NAState>, Option<NAPacket>)>();
+            pub(crate) fn subscribe(&mut self) -> Receiver<Message> {
+                let (sx, rx) = channel::<Message>();
                 self.senders.push(sx);
                 rx
             }
 
-            pub(crate) fn send(&mut self, message: (Option<NAError>, Option<NAState>, Option<NAPacket>)) {
+            pub(crate) fn send(&mut self, message: Message) {
                 let mut i = 0;
                 loop {
                     if i < self.senders.len() {

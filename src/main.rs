@@ -6,7 +6,7 @@ use std::time::Duration;
 use clap::Parser;
 use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
 use pcap::Device;
-use network_analyzer::sniffer::{get_adapter, Sniffer};
+use network_analyzer::sniffer::{get_adapter, Message, Sniffer};
 use network_analyzer::sniffer::filter::{Filter, get_filter};
 use network_analyzer::sniffer::na_packet::NAPacket;
 use network_analyzer::sniffer::na_state::NAState;
@@ -123,13 +123,7 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
         tui_window.as_ref().as_ref().unwrap().printw("\n");
         tui_window.as_ref().as_ref().unwrap().refresh();
     } else {
-        let format =
-            p.to_string_mac().as_str().to_owned() + "\n" +
-                p.to_string_source_socket().as_str() + "\n" +
-                p.to_string_dest_socket().as_str() + "\n" +
-                p.info().as_str() + "\n"
-            ;
-        println!("{}", format);
+        println!("{}", p);
     }
 }
 
@@ -223,14 +217,12 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>) {
                 None => (),
             }
 
-            if running == 0 {
-                sniffer.pause();
-            } else if running == 1 {
-                sniffer.resume();
-            } else {
-                sniffer.stop();
-                break;
+            match running {
+                0 => sniffer.pause(),
+                1 => sniffer.resume(),
+                _ => sniffer.stop(),
             }
+
         } else {
             break;
         }
@@ -279,18 +271,21 @@ fn main() {
         println!("--------------------------------------------------------------")
     } else {
         let tui_enabled: bool = args.tui;
+
         //Application state
         let mut s = Sniffer::new(args.adapter, args.output.clone(), args.update_time, args.filter.clone()).unwrap();
 
+        //Main-window initialization | Showing commands :
         let mut main_window = None;
 
         if tui_enabled {
-            let device_name = get_adapter(args.adapter).ok().unwrap().name;
-            let filter = get_filter(&args.filter.to_ascii_lowercase()).ok().unwrap();
+            let device_name = get_adapter(args.adapter).unwrap().name;
+            let filter = get_filter(&args.filter.to_ascii_lowercase()).unwrap();
             main_window = Some(tui_init(&device_name, &filter, &args.output, args.update_time));
         } else {
             notui_show_commands();
         }
+
 
         let receiver = s.subscribe();
 
@@ -311,7 +306,7 @@ fn main() {
 
             loop {
                 match receiver.recv() {
-                    Ok((Some(err), _, _)) => {
+                    Ok(Message::Error(err)) => {
                         if tui_enabled {
                             sub4.as_ref().unwrap().clear();
                             sub4.as_ref().unwrap().printw(err.to_string().as_str());
@@ -324,11 +319,11 @@ fn main() {
                         }
                         break;
                     }
-                    Ok((_, Some(state), _)) => {
+                    Ok(Message::State(state)) => {
                         print_state(state_window.as_ref(), &state);
                         if state.is_stopped() { break; }
                     }
-                    Ok((_, _, Some(packet))) => print_packet(packet, sub4.as_ref()),
+                    Ok(Message::Packet(packet)) => print_packet(packet, sub4.as_ref()),
                     Ok(_) => continue, // Should not be possible
                     Err(_) => break
                 }
