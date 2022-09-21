@@ -4,7 +4,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use clap::Parser;
-use cursive::backends::curses::pan::pancurses::{A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_GREEN, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+use cursive::backends::curses::pan::pancurses::{A_BOLD, A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
 use pcap::Device;
 use network_analyzer::sniffer::{get_adapter, Message, Sniffer};
 use network_analyzer::sniffer::filter::{Filter, get_filter};
@@ -58,9 +58,9 @@ fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> W
     start_color();
     init_pair(1, COLOR_WHITE, COLOR_BLACK);
     init_pair(2, COLOR_YELLOW, COLOR_BLACK);
-    init_pair(3, COLOR_RED, COLOR_BLACK);
+    init_pair(3, COLOR_MAGENTA, COLOR_BLACK);
     init_pair(4, COLOR_GREEN, COLOR_BLACK);
-    init_pair(5, COLOR_BLUE, COLOR_BLACK);
+    init_pair(5, COLOR_CYAN, COLOR_BLACK);
 
     //screen settings
     if cfg!(target_os = "linux") {
@@ -77,16 +77,25 @@ fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> W
     let sub2 = window.subwin(6, 67, 0, 12).unwrap();
     sub2.draw_box(0, 0);
     sub2.attron(COLOR_PAIR(4));
+    sub2.attron(A_BOLD);
     sub2.mvprintw(1, 1, "Adapter: ");
-    sub2.mvprintw(1, 9, adapter.to_string());
+    sub2.attroff(A_BOLD);
+    sub2.mvprintw(1, 10, adapter);
+    sub2.attron(A_BOLD);
     sub2.mvprintw(2, 1, "Filter: ");
+    sub2.attroff(A_BOLD);
     sub2.mvprintw(2, 9, filter.to_string());
+    sub2.attron(A_BOLD);
     sub2.mvprintw(3, 1, "Output file: ");
+    sub2.attroff(A_BOLD);
     sub2.mvprintw(3, 14, output);
+    sub2.attron(A_BOLD);
     sub2.mvprintw(4, 1, "Output upd. time (ms): ");
+    sub2.attroff(A_BOLD);
     sub2.mvprintw(4, 24, update_time.to_string().as_str());
     sub2.attroff(COLOR_PAIR(4));
     sub2.refresh();
+
 
     //subwindow 3
     let sub3 = newwin(33, 78, 9, 1);
@@ -111,9 +120,9 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
         tui_window.as_ref().as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(COLOR_PAIR(2));
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(3));
-        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_source_socket());
+        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_endpoints());
         tui_window.as_ref().as_ref().unwrap().printw("\n");
-        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_dest_socket());
+        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_ports());
         tui_window.as_ref().as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(COLOR_PAIR(3));
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(5));

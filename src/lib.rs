@@ -302,21 +302,21 @@ pub mod sniffer {
             pub fn to_string_mac(&self) -> String {
                 let mut s = String::new();
                 s.push_str(
-                    &*("MAC_s: ".to_owned() + &self.source_mac_address
+                    &*("MAC_s: ".to_owned() + &self.source_mac_address +"  "
                         + &*" MAC_d: ".to_owned() + &self.destination_mac_address));
                 s
             }
 
-            pub fn to_string_source_socket(&self) -> String {
+            pub fn to_string_endpoints(&self) -> String {
                 let mut s = String::new();
-                s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone())
-                    + &*" Port_s: ".to_owned() + &option_to_string(self.source_port)));
+                s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone())+"\t  "
+                    + &*" IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
                 s
             }
 
-            pub fn to_string_dest_socket(&self) -> String {
+            pub fn to_string_ports(&self) -> String {
                 let mut s = String::new();
-                s.push_str(&*("IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())
+                s.push_str(&*("Port_s: ".to_owned() + &option_to_string(self.source_port)+"\t\t  "
                     + &*" Port_d: ".to_owned() + &option_to_string(self.destination_port)));
                 s
             }
