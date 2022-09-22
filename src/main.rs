@@ -189,7 +189,7 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     //Event loop
     let mut menu = 0u8;
     let mut running = 0u8;
-
+    let mut state = NAState::RESUMED;
 
     loop {
         if sniffer.get_state().is_stopped() {
@@ -216,6 +216,7 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 if menu != 0 {
                     menu -= 1;
                 }
+                print_state(state_window.as_ref(), &state,semaphore.clone());
                 continue;
             }
 
@@ -223,6 +224,7 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 if menu != 2 {
                     menu += 1;
                 }
+                print_state(state_window.as_ref(), &state,semaphore.clone());
                 continue;
             }
 
@@ -237,14 +239,17 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
 
         match running {
             0 => {
+                state = NAState::PAUSED;
                 sniffer.pause();
                 print_state(state_window.as_ref(), &PAUSED, semaphore.clone() );
             }
             1 => {
+                state = NAState::RESUMED;
                 sniffer.resume();
                 print_state(state_window.as_ref(), &RESUMED, semaphore.clone());
             }
             _ => {
+                state = NAState::STOPPED;
                 sniffer.stop();
                 print_state(state_window.as_ref(), &STOPPED, semaphore.clone());
             }
