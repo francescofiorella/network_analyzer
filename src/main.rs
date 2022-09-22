@@ -116,22 +116,22 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
     if tui_window.is_some() {
         tui_window.as_ref().unwrap().attron(A_BOLD);
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(2));
-        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_mac());
-        tui_window.as_ref().as_ref().unwrap().printw("\n");
+        tui_window.as_ref().unwrap().printw(p.to_string_mac());
+        tui_window.as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(COLOR_PAIR(2));
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(3));
-        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_endpoints());
-        tui_window.as_ref().as_ref().unwrap().printw("\n");
-        tui_window.as_ref().as_ref().unwrap().printw(p.to_string_ports());
-        tui_window.as_ref().as_ref().unwrap().printw("\n");
+        tui_window.as_ref().unwrap().printw(p.to_string_endpoints());
+        tui_window.as_ref().unwrap().printw("\n");
+        tui_window.as_ref().unwrap().printw(p.to_string_ports());
+        tui_window.as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(COLOR_PAIR(3));
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(5));
-        tui_window.as_ref().as_ref().unwrap().printw(p.info());
+        tui_window.as_ref().unwrap().printw(p.info());
         tui_window.as_ref().unwrap().attroff(COLOR_PAIR(5));
-        tui_window.as_ref().as_ref().unwrap().printw("\n");
-        tui_window.as_ref().as_ref().unwrap().printw("\n");
+        tui_window.as_ref().unwrap().printw("\n");
+        tui_window.as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(A_BOLD);
-        tui_window.as_ref().as_ref().unwrap().refresh();
+        tui_window.as_ref().unwrap().refresh();
     } else {
         println!("{}", p);
     }
@@ -210,13 +210,12 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     loop {
         if !sniffer.get_state().is_stopped() {
             match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
-                Some(Input::KeyUp) => {
-                    if menu != 0 {
-                        menu -= 1;
-                        write_commands(menu, &sub1);
-                        continue;
-                    }
+                Some(Input::KeyUp) => if menu != 0 {
+                    menu -= 1;
+                    write_commands(menu, &sub1);
+                    continue;
                 }
+
                 Some(Input::KeyDown) => if menu != 2 {
                     menu += 1;
                     write_commands(menu, &sub1);
