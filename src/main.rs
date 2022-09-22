@@ -216,15 +216,19 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
         }
 
         match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
-            Some(Input::KeyUp) => if menu != 0 {
-                menu -= 1;
-                write_commands(menu, &sub1, semaphore);
+            Some(Input::KeyUp) => {
+                if menu != 0 {
+                    menu -= 1;
+                    write_commands(menu, &sub1, semaphore);
+                }
                 continue;
             }
 
-            Some(Input::KeyDown) => if menu != 2 {
-                menu += 1;
-                write_commands(menu, &sub1, semaphore);
+            Some(Input::KeyDown) => {
+                if menu != 2 {
+                    menu += 1;
+                    write_commands(menu, &sub1, semaphore);
+                }
                 continue;
             }
 
@@ -328,10 +332,12 @@ fn main() {
             let mut sub4: Option<Window> = None;
 
             if tui_enabled {
+                sem_cl.acquire();
                 let s4 = newwin(31, 76, 10, 2);
                 s4.scrollok(true);
                 s4.setscrreg(0, 30);
                 sub4 = Some(s4);
+                sem_cl.release();
             }
 
             loop {
