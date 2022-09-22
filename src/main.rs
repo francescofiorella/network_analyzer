@@ -11,6 +11,7 @@ use network_analyzer::sniffer::filter::{Filter, get_filter};
 use network_analyzer::sniffer::na_packet::NAPacket;
 use network_analyzer::sniffer::na_state::NAState;
 use network_analyzer::sniffer::na_state::NAState::{PAUSED, RESUMED, STOPPED};
+use crate::sem::Semaphore;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -112,8 +113,9 @@ fn state_win_init() -> Window {
     state_window
 }
 
-pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
+pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, semaphore: &Semaphore) {
     if tui_window.is_some() {
+        semaphore.acquire();
         tui_window.as_ref().unwrap().attron(A_BOLD);
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(2));
         tui_window.as_ref().unwrap().printw(p.to_string_mac());
@@ -132,12 +134,13 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>) {
         tui_window.as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(A_BOLD);
         tui_window.as_ref().unwrap().refresh();
+        semaphore.release();
     } else {
         println!("{}", p);
     }
 }
 
-fn print_state(state_window: Option<&Window>, state: &NAState) {
+fn print_state(state_window: Option<&Window>, state: &NAState, semaphore: &Semaphore) {
     let msg = match state {
         PAUSED => PAUSE,
         STOPPED => QUIT,
@@ -146,27 +149,29 @@ fn print_state(state_window: Option<&Window>, state: &NAState) {
 
     match state_window {
         Some(sw) => {
+            semaphore.acquire();
             sw.clear();
             sw.draw_box(0, 0);
             sw.mvprintw(1, 22, msg);
             sw.refresh();
+            semaphore.release();
         }
 
         None => println!("{}", msg),
     }
 }
 
-fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool) {
+fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, semaphore: &Semaphore) {
     if tui {
-        tui_event_handler(sniffer, main_window, state_window); // blocking function until stop
+        tui_event_handler(sniffer, main_window, state_window, semaphore); // blocking function until stop
     } else {
         notui_event_handler(sniffer); // blocking function until stop
         println!("Closing event handler loop");
     }
 }
 
-fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>) {
-    fn write_commands(menu: u8, sub1: &Window) {
+fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, semaphore: &Semaphore) {
+    fn write_commands(menu: u8, sub1: &Window, semaphore: &Semaphore) {
         //commands definition
         let commands = vec![
             "PAUSE",
@@ -175,6 +180,7 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
         ];
 
         for (mut index, command) in commands.iter().enumerate() {
+            semaphore.acquire();
             if menu == index as u8 {
                 sub1.attron(A_REVERSE);
             } else {
@@ -185,21 +191,24 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 index as i32
             };
             sub1.mvprintw(y, 2, command);
+            semaphore.release();
         }
     }
 
     //drawing subwindow 1
+    semaphore.acquire();
     let sub1 = main_window.as_ref().unwrap().subwin(6, 11, 0, 1).unwrap();
     sub1.draw_box(0, 0);
     sub1.mvprintw(1, 2, "Command");
     sub1.keypad(true);
     sub1.refresh();
+    semaphore.release();
 
     //Event loop
     let mut menu = 0u8;
     let mut running = 0u8;
 
-    write_commands(menu, &sub1);
+    write_commands(menu, &sub1, semaphore);
 
     loop {
         if sniffer.get_state().is_stopped() {
@@ -209,13 +218,13 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
         match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
             Some(Input::KeyUp) => if menu != 0 {
                 menu -= 1;
-                write_commands(menu, &sub1);
+                write_commands(menu, &sub1, semaphore);
                 continue;
             }
 
             Some(Input::KeyDown) => if menu != 2 {
                 menu += 1;
-                write_commands(menu, &sub1);
+                write_commands(menu, &sub1, semaphore);
                 continue;
             }
 
@@ -235,15 +244,15 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
         match running {
             0 => {
                 sniffer.pause();
-                print_state(state_window.as_ref(), &PAUSED);
+                print_state(state_window.as_ref(), &PAUSED, semaphore);
             }
             1 => {
                 sniffer.resume();
-                print_state(state_window.as_ref(), &RESUMED);
+                print_state(state_window.as_ref(), &RESUMED, semaphore);
             }
             _ => {
                 sniffer.stop();
-                print_state(state_window.as_ref(), &STOPPED);
+                print_state(state_window.as_ref(), &STOPPED, semaphore);
             }
         }
     }
@@ -309,6 +318,8 @@ fn main() {
             notui_show_commands();
         }
 
+        let sem = Semaphore::new(1);
+        let sem_cl = sem.clone();
 
         let receiver = s.subscribe();
 
@@ -327,11 +338,13 @@ fn main() {
                 match receiver.recv() {
                     Ok(Message::Error(err)) => {
                         if tui_enabled {
+                            sem_cl.acquire();
                             sub4.as_ref().unwrap().clear();
                             sub4.as_ref().unwrap().printw(err.to_string().as_str());
                             sub4.as_ref().unwrap().printw("\n");
                             sub4.as_ref().unwrap().printw("Press any key to quit");
                             sub4.as_ref().unwrap().refresh();
+                            sem_cl.release();
                         } else {
                             println!("ERROR: {}", err);
                             println!("Press any key + \"Enter\" to quit")
@@ -341,7 +354,7 @@ fn main() {
                     Ok(Message::State(state)) => {
                         if state.is_stopped() { break; }
                     }
-                    Ok(Message::Packet(packet)) => print_packet(packet, sub4.as_ref()),
+                    Ok(Message::Packet(packet)) => print_packet(packet, sub4.as_ref(), &sem_cl),
                     Err(_) => break
                 }
             }
@@ -352,8 +365,38 @@ fn main() {
 
         // Event Handler
         // Main thread in loop qui dentro
-        enable_commands(&mut s, main_window, state_window, tui_enabled);
+        enable_commands(&mut s, main_window, state_window, tui_enabled, &sem);
 
         observer_thread.join().unwrap();
+    }
+}
+
+mod sem {
+    use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+
+    pub struct Semaphore {
+        m: Mutex<usize>,
+        cv: Condvar,
+        size: usize
+    }
+
+    impl Semaphore {
+        pub fn new(n: usize) -> Arc<Self> {
+            let m: Mutex<usize> = Mutex::new(0);
+            let cv: Condvar = Condvar::new();
+            Arc::new(Semaphore {m, cv, size: n})
+        }
+
+        pub fn acquire(&self) {
+            let mut n: MutexGuard<usize> = self.m.lock().unwrap();
+            n = self.cv.wait_while(n, |n: &mut usize| *n == self.size).unwrap();
+            *n += 1;
+        }
+
+        pub fn release(&self) {
+            let mut n: MutexGuard<usize> = self.m.lock().unwrap();
+            *n -= 1;
+            self.cv.notify_one();
+        }
     }
 }
