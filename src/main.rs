@@ -157,10 +157,10 @@ fn print_state(state_window: Option<&Window>, state: &NAState) {
     }
 }
 
-fn enable_commands(sniffer: &mut Sniffer, sub1: Option<Window>, tui: bool) {
+fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool) {
     match tui {
         true => {
-            tui_event_handler(sniffer, sub1); //blocking function until stop
+            tui_event_handler(sniffer, main_window, state_window); //blocking function until stop
         }
         false => {
             notui_event_handler(sniffer); //blocking function until stop
@@ -172,7 +172,7 @@ fn enable_commands(sniffer: &mut Sniffer, sub1: Option<Window>, tui: bool) {
     }
 }
 
-fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>) {
+fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>) {
     //drawing subwindow 1
     let sub1 = main_window.as_ref().unwrap().subwin(6, 11, 0, 1).unwrap();
     sub1.draw_box(0, 0);
@@ -231,9 +231,18 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>) {
             }
 
             match running {
-                0 => sniffer.pause(),
-                1 => sniffer.resume(),
-                _ => sniffer.stop(),
+                0 => {
+                    sniffer.pause();
+                    print_state(state_window.as_ref(), &PAUSED);
+                },
+                1 => {
+                    sniffer.resume();
+                    print_state(state_window.as_ref(), &PAUSED);
+                },
+                _ => {
+                    sniffer.stop();
+                    print_state(state_window.as_ref(), &PAUSED);
+                },
             }
 
         } else {
@@ -290,11 +299,14 @@ fn main() {
 
         //Main-window initialization | Showing commands :
         let mut main_window = None;
+        let mut state_window: Option<Window> = None;
 
         if tui_enabled {
             let device_name = get_adapter(args.adapter).unwrap().name;
             let filter = get_filter(&args.filter.to_ascii_lowercase()).unwrap();
             main_window = Some(tui_init(&device_name, &filter, &args.output, args.update_time));
+            let s_w = state_win_init();
+            state_window = Some(s_w);
         } else {
             notui_show_commands();
         }
@@ -304,13 +316,9 @@ fn main() {
 
         // observe the sniffer, print packets and state
         let observer_thread = thread::spawn(move || {
-            let mut state_window: Option<Window> = None;
             let mut sub4: Option<Window> = None;
 
             if tui_enabled {
-                let s_w = state_win_init();
-                state_window = Some(s_w);
-
                 let s4 = newwin(31, 76, 10, 2);
                 s4.scrollok(true);
                 s4.setscrreg(0, 30);
@@ -333,11 +341,9 @@ fn main() {
                         break;
                     }
                     Ok(Message::State(state)) => {
-                        print_state(state_window.as_ref(), &state);
                         if state.is_stopped() { break; }
                     }
                     Ok(Message::Packet(packet)) => print_packet(packet, sub4.as_ref()),
-                    Ok(_) => continue, // Should not be possible
                     Err(_) => break
                 }
             }
@@ -348,7 +354,7 @@ fn main() {
 
         // Event Handler
         // Main thread in loop qui dentro
-        enable_commands(&mut s, main_window, tui_enabled);
+        enable_commands(&mut s, main_window, state_window, tui_enabled);
 
         observer_thread.join().unwrap();
     }
