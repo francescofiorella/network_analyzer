@@ -113,7 +113,7 @@ pub mod sniffer {
                                 let p = NAPacket::new(packet.clone());
 
                                 if p.filter(enum_filter.clone()) {
-                                    mg.3.send((Message::Packet(p.clone())));
+                                    mg.3.send(Message::Packet(p.clone()));
                                     mg.1.push(p);
                                 }
                             }
@@ -164,7 +164,7 @@ pub mod sniffer {
         pub fn pause(&mut self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = PAUSED;
-            mg.3.send((Message::State(PAUSED)));
+            mg.3.send(Message::State(PAUSED));
             mg.2 = produce_report(self.report_file_name.0.clone(), self.report_file_name.1.clone(), mg.1.clone(), mg.2.clone());
             mg.1 = Vec::new();
         }
@@ -172,14 +172,14 @@ pub mod sniffer {
         pub fn resume(&mut self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = RESUMED;
-            mg.3.send((Message::State(RESUMED)));
+            mg.3.send(Message::State(RESUMED));
             self.cv.notify_all();
         }
 
         pub fn stop(&mut self) {
             let mut mg = self.m.lock().unwrap();
             mg.0 = STOPPED;
-            mg.3.send((Message::State(STOPPED)));
+            mg.3.send(Message::State(STOPPED));
             self.cv.notify_all();
         }
 
@@ -929,9 +929,6 @@ pub mod sniffer {
     mod channel {
         use std::sync::mpsc::{channel, Receiver, Sender};
         use crate::sniffer::Message;
-        use crate::sniffer::na_error::NAError;
-        use crate::sniffer::na_packet::NAPacket;
-        use crate::sniffer::na_state::NAState;
 
         pub(crate) struct SnifferChannel {
             senders: Vec<Sender<Message>>

@@ -4,7 +4,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use clap::Parser;
-use cursive::backends::curses::pan::pancurses::{A_BOLD, A_REVERSE, COLOR_BLACK, COLOR_BLUE, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_RED, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+use cursive::backends::curses::pan::pancurses::{A_BOLD, A_REVERSE, COLOR_BLACK, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
 use pcap::Device;
 use network_analyzer::sniffer::{get_adapter, Message, Sniffer};
 use network_analyzer::sniffer::filter::{Filter, get_filter};
@@ -96,7 +96,6 @@ fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> W
     sub2.attroff(COLOR_PAIR(4));
     sub2.refresh();
 
-
     //subwindow 3
     let sub3 = newwin(33, 78, 9, 1);
     sub3.draw_box(0, 0);
@@ -173,6 +172,28 @@ fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_win
 }
 
 fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>) {
+    fn write_commands(menu: u8, sub1: &Window) {
+        //commands definition
+        let commands = vec![
+            "PAUSE",
+            "RESUME",
+            "QUIT",
+        ];
+
+        for (mut index, command) in commands.iter().enumerate() {
+            if menu == index as u8 {
+                sub1.attron(A_REVERSE);
+            } else {
+                sub1.attroff(A_REVERSE);
+            }
+            let y = {
+                index += 2;
+                index as i32
+            };
+            sub1.mvprintw(y, 2, command);
+        }
+    }
+
     //drawing subwindow 1
     let sub1 = main_window.as_ref().unwrap().subwin(6, 11, 0, 1).unwrap();
     sub1.draw_box(0, 0);
@@ -180,40 +201,25 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     sub1.keypad(true);
     sub1.refresh();
 
-    //commands definition
-    let commands = vec![
-        "PAUSE",
-        "RESUME",
-        "QUIT",
-    ];
-
     //Event loop
     let mut menu = 0u8;
     let mut running = 0u8;
 
+    write_commands(menu, &sub1);
+
     loop {
         if !sniffer.get_state().is_stopped() {
-            for (mut index, command) in commands.iter().enumerate() {
-                if menu == index as u8 {
-                    sub1.attron(A_REVERSE);
-                } else {
-                    sub1.attroff(A_REVERSE);
-                }
-                let y = {
-                    index += 2;
-                    index as i32
-                };
-                sub1.mvprintw(y, 2, command);
-            }
             match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
                 Some(Input::KeyUp) => {
                     if menu != 0 {
                         menu -= 1;
+                        write_commands(menu, &sub1);
                         continue;
                     }
                 }
                 Some(Input::KeyDown) => if menu != 2 {
                     menu += 1;
+                    write_commands(menu, &sub1);
                     continue;
                 }
 
@@ -237,11 +243,11 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 },
                 1 => {
                     sniffer.resume();
-                    print_state(state_window.as_ref(), &PAUSED);
+                    print_state(state_window.as_ref(), &RESUMED);
                 },
                 _ => {
                     sniffer.stop();
-                    print_state(state_window.as_ref(), &PAUSED);
+                    print_state(state_window.as_ref(), &STOPPED);
                 },
             }
 
