@@ -51,7 +51,7 @@ fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> W
     //screen initialization
     if cfg!(target_os = "macos") {
         Command::new("/usr/X11/bin/resize").arg("-s").arg("43").arg("80").output().expect("Error while calling resize command");
-    } else if cfg!(target_os="linux"){
+    } else if cfg!(target_os="linux") {
         Command::new("resize").arg("-s").arg("43").arg("80").output().expect("Error while calling resize command");
     }
     let window = initscr();
@@ -157,16 +157,10 @@ fn print_state(state_window: Option<&Window>, state: &NAState) {
 }
 
 fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool) {
-    match tui {
-        true => {
-            tui_event_handler(sniffer, main_window, state_window); //blocking function until stop
-        }
-        false => {
-            notui_event_handler(sniffer); //blocking function until stop
-        }
-    }
-
-    if !tui {
+    if tui {
+        tui_event_handler(sniffer, main_window, state_window); // blocking function until stop
+    } else {
+        notui_event_handler(sniffer); // blocking function until stop
         println!("Closing event handler loop");
     }
 }
@@ -242,15 +236,15 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
             0 => {
                 sniffer.pause();
                 print_state(state_window.as_ref(), &PAUSED);
-            },
+            }
             1 => {
                 sniffer.resume();
                 print_state(state_window.as_ref(), &RESUMED);
-            },
+            }
             _ => {
                 sniffer.stop();
                 print_state(state_window.as_ref(), &STOPPED);
-            },
+            }
         }
     }
 }

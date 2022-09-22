@@ -20,7 +20,7 @@ pub mod sniffer {
         let device_list = Device::list().unwrap();
         let mut couple = Vec::<(u8, Device)>::new();
         for (index, device) in device_list.into_iter().enumerate() {
-            couple.push((index as u8 + 1 , device));
+            couple.push((index as u8 + 1, device));
         }
         let device = match couple.into_iter().find(|c| c.0 == adapter) {
             Some((_, dev)) => dev,
@@ -34,7 +34,7 @@ pub mod sniffer {
         m: Arc<Mutex<(NAState, Vec<NAPacket>, Vec<Stats>, SnifferChannel)>>,
         jh: Option<(JoinHandle<()>, JoinHandle<()>)>,
         cv: Arc<Condvar>,
-        report_file_name: (String, String)
+        report_file_name: (String, String),
     }
 
     impl Sniffer {
@@ -220,24 +220,18 @@ pub mod sniffer {
         pub struct NAPacket {
             //level 2 header
             destination_mac_address: String,
-            // 0 - 5
-            source_mac_address: String, // 6 - 11
+            source_mac_address: String,
 
             //level 3 header
             pub(crate) level_three_type: String,
-            // 12 - 13
             pub(crate) total_length: u32,
-            // 16 - 17
             pub(crate) source_address: Option<String>,
-            // 26 - 29
-            pub(crate) destination_address: Option<String>, // 30 - 33
+            pub(crate) destination_address: Option<String>,
 
             //level 4 header
             pub(crate) transported_protocol: Option<String>,
-            // 23
             pub(crate) source_port: Option<u16>,
-            // 34 - 35
-            pub(crate) destination_port: Option<u16>, // 36 - 37
+            pub(crate) destination_port: Option<u16>,
 
             pub(crate) timestamp: u128,
         }
@@ -262,7 +256,7 @@ pub mod sniffer {
                             source_port = Some(to_u16(&pcap_packet, 34));
                             destination_port = Some(to_u16(&pcap_packet, 36));
                         }
-                    },
+                    }
                     // IPv6
                     0x86DD => {
                         source_address = Some(to_ipv6_address(&pcap_packet, 22));
@@ -274,14 +268,14 @@ pub mod sniffer {
                             source_port = Some(to_u16(&pcap_packet, port_index));
                             destination_port = Some(to_u16(&pcap_packet, port_index + 2));
                         }
-                    },
+                    }
                     // ARP | RARP
                     0x0806 | 0x8035 => {
                         // Sender IP
                         source_address = Some(to_ip_address(&pcap_packet, 28));
                         // Target IP
                         destination_address = Some(to_ip_address(&pcap_packet, 38));
-                    },
+                    }
                     _ => ()
                 }
 
@@ -295,28 +289,27 @@ pub mod sniffer {
                     transported_protocol,
                     source_port,
                     destination_port,
-                    timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis()
+                    timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis(),
                 }
             }
 
             pub fn to_string_mac(&self) -> String {
                 let mut s = String::new();
-                s.push_str(
-                    &*("MAC_s: ".to_owned() + &self.source_mac_address +"  "
-                        + &*" MAC_d: ".to_owned() + &self.destination_mac_address));
+                s.push_str(&*("MAC_s: ".to_owned() + &self.source_mac_address + "  "
+                    + &*" MAC_d: ".to_owned() + &self.destination_mac_address));
                 s
             }
 
             pub fn to_string_endpoints(&self) -> String {
                 let mut s = String::new();
-                s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone())+"\t  "
+                s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone()) + "\t  "
                     + &*" IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
                 s
             }
 
             pub fn to_string_ports(&self) -> String {
                 let mut s = String::new();
-                s.push_str(&*("Port_s: ".to_owned() + &option_to_string(self.source_port)+"\t\t  "
+                s.push_str(&*("Port_s: ".to_owned() + &option_to_string(self.source_port) + "\t\t  "
                     + &*" Port_d: ".to_owned() + &option_to_string(self.destination_port)));
                 s
             }
@@ -338,13 +331,13 @@ pub mod sniffer {
                     Filter::ARP if self.level_three_type == "ARP" => true,
                     Filter::IP(ip) => {
                         if self.source_address.is_some() && self.destination_address.is_some() {
-                            return ip == *self.destination_address.as_ref().unwrap() || ip == *self.source_address.as_ref().unwrap()
+                            return ip == *self.destination_address.as_ref().unwrap() || ip == *self.source_address.as_ref().unwrap();
                         }
                         false
-                    },
+                    }
                     Filter::Port(port) => {
                         if self.source_port.is_some() && self.destination_port.is_some() {
-                            return port == self.source_port.unwrap() || port == self.destination_port.unwrap()
+                            return port == self.source_port.unwrap() || port == self.destination_port.unwrap();
                         }
                         false
                     }
@@ -355,16 +348,13 @@ pub mod sniffer {
 
         impl Display for NAPacket {
             fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-                    let format =
-                        self.to_string_mac().as_str().to_owned() + "\n" +
-                            self.to_string_endpoints().as_str() + "\n" +
-                            self.to_string_ports().as_str() + "\n" +
-                            self.info().as_str() + "\n"
-                        ;
-                    write!(f, "{}", format)
+                let format = self.to_string_mac().as_str().to_owned() + "\n" +
+                    self.to_string_endpoints().as_str() + "\n" +
+                    self.to_string_ports().as_str() + "\n" +
+                    self.info().as_str() + "\n";
+                write!(f, "{}", format)
             }
         }
-
 
 
         mod protocols {
@@ -388,7 +378,7 @@ pub mod sniffer {
                     p[start],
                     p[start + 1],
                     p[start + 2],
-                    p[start + 3]
+                    p[start + 3],
                 ).to_string()
             }
 
@@ -679,7 +669,6 @@ pub mod sniffer {
                         s.push_str(&port.to_string());
                         s
                     }
-
                 }
             }
         }
@@ -699,26 +688,26 @@ pub mod sniffer {
                     if v.len() == 4 {
                         for u8_block in v {
                             if u8_block.parse::<u8>().is_err() {
-                                return Err(NAError::new("Not a valid IPv4 addr. as filter"))
+                                return Err(NAError::new("Not a valid IPv4 addr. as filter"));
                             }
                         }
-                        return Ok(Filter::IP(string.to_string()))
+                        return Ok(Filter::IP(string.to_string()));
                     }
-                    return Err(NAError::new("Not an IP addr. as filter"))
+                    return Err(NAError::new("Not an IP addr. as filter"));
                 }
 
                 //ipv6 addr
                 string if string.contains(':') => {
-                    let v : Vec<&str> = string.split(':').collect();
+                    let v: Vec<&str> = string.split(':').collect();
                     if v.len() <= 8 {
                         for u16_block in v {
-                            if u16::from_str_radix(u16_block, 16).is_err() && !u16_block.is_empty(){
-                                return Err(NAError::new("Not a valid IPv6 addr. as filter"))
+                            if u16::from_str_radix(u16_block, 16).is_err() && !u16_block.is_empty() {
+                                return Err(NAError::new("Not a valid IPv6 addr. as filter"));
                             }
                         }
-                        return Ok(Filter::IP(string.to_string()))
+                        return Ok(Filter::IP(string.to_string()));
                     }
-                    return Err(NAError::new("Not a valid IPv6 addr. as filter"))
+                    return Err(NAError::new("Not a valid IPv6 addr. as filter"));
                 }
 
                 //port
@@ -752,7 +741,7 @@ pub mod sniffer {
                     transported_protocol: packet.transported_protocol,
                     total_bytes: packet.total_length as u128,
                     first_timestamp: packet.timestamp,
-                    last_timestamp: packet.timestamp
+                    last_timestamp: packet.timestamp,
                 }
             }
         }
@@ -931,7 +920,7 @@ pub mod sniffer {
         use crate::sniffer::Message;
 
         pub(crate) struct SnifferChannel {
-            senders: Vec<Sender<Message>>
+            senders: Vec<Sender<Message>>,
         }
 
         impl SnifferChannel {
@@ -950,12 +939,8 @@ pub mod sniffer {
                 loop {
                     if i < self.senders.len() {
                         match self.senders[i].send(message.clone()) {
-                            Err(_) => {
-                                drop(self.senders.remove(i))
-                            },
-                            _ => {
-                                i += 1
-                            }
+                            Err(_) => drop(self.senders.remove(i)),
+                            _ => i += 1
                         }
                     } else {
                         break;
