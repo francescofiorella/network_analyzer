@@ -104,7 +104,7 @@ pub mod sniffer {
                                         .promisc(true)
                                         .open()
                                         .unwrap();
-                                    drop(mg);
+                                    //drop(mg);
                                     continue;
                                 } else if mg.0.is_stopped() {
                                     break;
@@ -302,7 +302,11 @@ pub mod sniffer {
 
             pub fn to_string_endpoints(&self) -> String {
                 let mut s = String::new();
-                s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone()) + "\t  "
+                let mut space = "\t ";
+                if option_to_string(self.source_address.clone()) == "None"{
+                    space="\t\t "
+                }
+                s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone()) + space
                     + &*" IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
                 s
             }
@@ -310,7 +314,7 @@ pub mod sniffer {
             pub fn to_string_ports(&self) -> String {
                 let mut s = String::new();
                 s.push_str(&*("Port_s: ".to_owned() + &option_to_string(self.source_port) + "\t\t  "
-                    + &*" Port_d: ".to_owned() + &option_to_string(self.destination_port)));
+                    + &*"Port_d: ".to_owned() + &option_to_string(self.destination_port)));
                 s
             }
 
