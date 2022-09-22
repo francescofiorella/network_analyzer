@@ -208,50 +208,49 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     write_commands(menu, &sub1);
 
     loop {
-        if !sniffer.get_state().is_stopped() {
-            match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
-                Some(Input::KeyUp) => if menu != 0 {
-                    menu -= 1;
-                    write_commands(menu, &sub1);
-                    continue;
-                }
-
-                Some(Input::KeyDown) => if menu != 2 {
-                    menu += 1;
-                    write_commands(menu, &sub1);
-                    continue;
-                }
-
-                Some(Input::KeyRight) => {
-                    running = menu
-                }
-
-                Some(Input::Character('\n')) => {
-                    running = menu
-                }
-
-                Some(_) => continue,
-
-                None => (),
-            }
-
-            match running {
-                0 => {
-                    sniffer.pause();
-                    print_state(state_window.as_ref(), &PAUSED);
-                },
-                1 => {
-                    sniffer.resume();
-                    print_state(state_window.as_ref(), &RESUMED);
-                },
-                _ => {
-                    sniffer.stop();
-                    print_state(state_window.as_ref(), &STOPPED);
-                },
-            }
-
-        } else {
+        if sniffer.get_state().is_stopped() {
             break;
+        }
+
+        match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
+            Some(Input::KeyUp) => if menu != 0 {
+                menu -= 1;
+                write_commands(menu, &sub1);
+                continue;
+            }
+
+            Some(Input::KeyDown) => if menu != 2 {
+                menu += 1;
+                write_commands(menu, &sub1);
+                continue;
+            }
+
+            Some(Input::KeyRight) => {
+                running = menu
+            }
+
+            Some(Input::Character('\n')) => {
+                running = menu
+            }
+
+            Some(_) => continue,
+
+            None => (),
+        }
+
+        match running {
+            0 => {
+                sniffer.pause();
+                print_state(state_window.as_ref(), &PAUSED);
+            },
+            1 => {
+                sniffer.resume();
+                print_state(state_window.as_ref(), &RESUMED);
+            },
+            _ => {
+                sniffer.stop();
+                print_state(state_window.as_ref(), &STOPPED);
+            },
         }
     }
 }
