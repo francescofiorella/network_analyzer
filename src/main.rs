@@ -113,9 +113,9 @@ fn state_win_init() -> Window {
     state_window
 }
 
-pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, semaphore: Arc<Semaphore>) {
+pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>) {
     if tui_window.is_some() {
-        semaphore.acquire();
+        let mg = tui_mutex.lock().unwrap(); //drop at the end of the block
         tui_window.as_ref().unwrap().attron(A_BOLD);
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(2));
         tui_window.as_ref().unwrap().printw(p.to_string_mac());
@@ -134,13 +134,12 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, semaphore: Arc<Sem
         tui_window.as_ref().unwrap().printw("\n");
         tui_window.as_ref().unwrap().attroff(A_BOLD);
         tui_window.as_ref().unwrap().refresh();
-        semaphore.release();
     } else {
         println!("{}", p);
     }
 }
 
-fn print_state(state_window: Option<&Window> , state: &NAState, semaphore: Arc<Semaphore>) {
+fn print_state(state_window: Option<&Window> , state: &NAState, tui_mutex: Arc<Mutex<()>>) {
     let msg = match state {
         PAUSED => PAUSE,
         STOPPED => QUIT,
@@ -149,28 +148,27 @@ fn print_state(state_window: Option<&Window> , state: &NAState, semaphore: Arc<S
 
     match state_window {
         Some(sw) => {
-            semaphore.acquire();
+            let mg = tui_mutex.lock().unwrap(); //release at end of the block
             sw.clear();
             sw.draw_box(0, 0);
             sw.mvprintw(1, 22, msg);
             sw.refresh();
-            semaphore.release();
         }
 
         None => println!("{}", msg),
     }
 }
 
-fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, semaphore: Arc<Semaphore>) {
+fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, tui_mutex: Arc<Mutex<()>>) {
     if tui {
-        tui_event_handler(sniffer, main_window, state_window, semaphore); // blocking function until stop
+        tui_event_handler(sniffer, main_window, state_window, tui_mutex); // blocking function until stop
     } else {
         notui_event_handler(sniffer); // blocking function until stop
         println!("Closing event handler loop");
     }
 }
 
-fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, semaphore: Arc<Semaphore>) {
+fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui_mutex: Arc<Mutex<()>>) {
     //commands definition
     let commands = vec![
         "PAUSE",
@@ -189,14 +187,13 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     //Event loop
     let mut menu = 0u8;
     let mut running = 0u8;
-    // let mut state = NAState::RESUMED;
 
     loop {
         if sniffer.get_state().is_stopped() {
             break;
         }
 
-        semaphore.acquire();
+        let mg = tui_mutex.lock().unwrap();
 
         for (mut index, command) in commands.iter().enumerate() {
             if menu == index as u8 {
@@ -214,14 +211,13 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
         }
 
         sub1.refresh();
-        semaphore.release();
+        drop(mg);
 
         match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
             Some(Input::KeyUp) => {
                 if menu != 0 {
                     menu -= 1;
                 }
-                //print_state(state_window.as_ref(), &state ,semaphore.clone());
                 continue;
             }
 
@@ -229,7 +225,6 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 if menu != 2 {
                     menu += 1;
                 }
-                //print_state(state_window.as_ref() ,&state ,semaphore.clone());
                 continue;
             }
 
@@ -244,19 +239,16 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
 
         match running {
             0 => {
-               // state = NAState::PAUSED;
                 sniffer.pause();
-                print_state(state_window.as_ref(), &PAUSED, semaphore.clone() );
+                print_state(state_window.as_ref(), &PAUSED, tui_mutex.clone() );
             }
             1 => {
-               // state = NAState::RESUMED;
                 sniffer.resume();
-                print_state(state_window.as_ref(), &RESUMED, semaphore.clone());
+                print_state(state_window.as_ref(), &RESUMED, tui_mutex.clone());
             }
             _ => {
-               // state = NAState::STOPPED;
                 sniffer.stop();
-                print_state(state_window.as_ref(), &STOPPED, semaphore.clone());
+                print_state(state_window.as_ref(), &STOPPED, tui_mutex.clone());
             }
         }
     }
@@ -324,8 +316,8 @@ fn main() {
 
         let receiver = s.subscribe();
 
-        let sem = Semaphore::new();
-        let sem_cl = sem.clone();
+        let tui_mutex = Arc::new(Mutex::new(()));
+        let tui_mutex_cl = tui_mutex.clone();
 
         // observe the sniffer, print packets and state
         let observer_thread = thread::spawn(move || {
@@ -356,7 +348,7 @@ fn main() {
                     Ok(Message::State(state)) => {
                         if state.is_stopped() { break; }
                     }
-                    Ok(Message::Packet(packet)) =>  print_packet(packet, sub4.as_ref(),sem_cl.clone()) ,
+                    Ok(Message::Packet(packet)) =>  print_packet(packet, sub4.as_ref(),tui_mutex_cl.clone()) ,
                     Err(_) => break
                 }
             }
@@ -367,36 +359,8 @@ fn main() {
 
         // Event Handler
         // Main thread in loop qui dentro
-        enable_commands(&mut s, main_window, state_window, tui_enabled, sem);
+        enable_commands(&mut s, main_window, state_window, tui_enabled, tui_mutex);
 
         observer_thread.join().unwrap();
     }
-}
-
-pub struct Semaphore {
-    m: Mutex<u8>,
-    cv: Condvar,
-}
-
-impl Semaphore {
-    pub fn new() -> Arc<Self> {
-        Arc::new(Semaphore {
-            m: Mutex::new(1),
-            cv: Condvar::new(),
-        })
-    }
-
-    pub fn acquire(&self) {
-        let mut mg = self.m.lock().unwrap();
-        mg = self.cv.wait_while(mg, |mg| *mg == 0).unwrap();
-        *mg -= 1;
-
-    }
-
-    pub fn release(&self) {
-        let mut mg = self.m.lock().unwrap();
-        *mg += 1;
-        self.cv.notify_one();
-    }
-
 }
