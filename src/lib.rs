@@ -38,6 +38,8 @@ pub mod sniffer {
     }
 
     impl Sniffer {
+
+        #[allow(unused_assignments)] //DA RIMUOVERE IN FASE DI DEBUG
         pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError> {
             let report_file_name = get_file_name(output.clone());
             let report_file_name_cl = report_file_name.clone();
