@@ -140,7 +140,7 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, semaphore: Arc<Sem
     }
 }
 
-fn print_state(state_window: Option<&Window>, state: &NAState, semaphore: Arc<Semaphore>) {
+fn print_state(state_window: Option<&Window> , state: &NAState, semaphore: Arc<Semaphore>) {
     let msg = match state {
         PAUSED => PAUSE,
         STOPPED => QUIT,
@@ -189,12 +189,14 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     //Event loop
     let mut menu = 0u8;
     let mut running = 0u8;
-    let mut state = NAState::RESUMED;
+    // let mut state = NAState::RESUMED;
 
     loop {
         if sniffer.get_state().is_stopped() {
             break;
         }
+
+        semaphore.acquire();
 
         for (mut index, command) in commands.iter().enumerate() {
             if menu == index as u8 {
@@ -206,17 +208,20 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 index += 2;
                 index as i32
             };
-            semaphore.acquire();
+            
             sub1.mvprintw(y, 2, command);
-            semaphore.release();
+            
         }
+
+        sub1.refresh();
+        semaphore.release();
 
         match sub1.getch() { //getch waits for user key input -> returns Input value assoc. to the key
             Some(Input::KeyUp) => {
                 if menu != 0 {
                     menu -= 1;
                 }
-                print_state(state_window.as_ref(), &state,semaphore.clone());
+                //print_state(state_window.as_ref(), &state ,semaphore.clone());
                 continue;
             }
 
@@ -224,7 +229,7 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 if menu != 2 {
                     menu += 1;
                 }
-                print_state(state_window.as_ref(), &state,semaphore.clone());
+                //print_state(state_window.as_ref() ,&state ,semaphore.clone());
                 continue;
             }
 
@@ -239,17 +244,17 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
 
         match running {
             0 => {
-                state = NAState::PAUSED;
+               // state = NAState::PAUSED;
                 sniffer.pause();
                 print_state(state_window.as_ref(), &PAUSED, semaphore.clone() );
             }
             1 => {
-                state = NAState::RESUMED;
+               // state = NAState::RESUMED;
                 sniffer.resume();
                 print_state(state_window.as_ref(), &RESUMED, semaphore.clone());
             }
             _ => {
-                state = NAState::STOPPED;
+               // state = NAState::STOPPED;
                 sniffer.stop();
                 print_state(state_window.as_ref(), &STOPPED, semaphore.clone());
             }
