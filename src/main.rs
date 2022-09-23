@@ -5,7 +5,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use clap::Parser;
-use cursive::backends::curses::pan::pancurses::{A_BOLD, A_COLOR, A_REVERSE, COLOR_BLACK, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+use cursive::backends::curses::pan::pancurses::{A_BOLD, A_REVERSE, COLOR_BLACK, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
 use pcap::Device;
 use network_analyzer::sniffer::{get_adapter, Message, Sniffer};
 use network_analyzer::sniffer::filter::{Filter, get_filter};
@@ -283,9 +283,14 @@ fn notui_event_handler(sniffer: &mut Sniffer) {
     }
 }
 
-fn print_closing(window: &Window) {
+fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
+    let _mg = tui_mutex.lock().unwrap();
     window.clear();
-    window.attron(A_COLOR);
+    
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux"){
+        window.attron(A_BOLD);
+    }
+
     window.attron(COLOR_PAIR(2));
     window.mvprintw(5, 25, "    ______ _____ _____");
     window.mvprintw(6, 25, "   / ____/ ____/ ____/");
@@ -306,8 +311,12 @@ fn print_closing(window: &Window) {
     window.mvprintw(16, 15, " / /_/ / / / / /_/ / / /_/ / / //  __/ /    ");
     window.mvprintw(17, 15, " \\__,_/_/ /_/\\__,_/_/\\__, / /___|___/_/");
     window.mvprintw(18, 15, "                    /____/");
+    
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux"){
+    window.attroff(A_BOLD);
+    }
+
     window.attroff(COLOR_PAIR(5));
-    window.attroff(A_COLOR);
     window.refresh();
 }
 
@@ -375,7 +384,7 @@ fn main() {
                     }
                     Ok(Message::State(state)) => {
                         if state.is_stopped() {
-                            print_closing(sub4.as_ref().unwrap());
+                            print_closing(sub4.as_ref().unwrap(), tui_mutex_cl.clone());
                             break; }
                     }
                     Ok(Message::Packet(packet)) =>  print_packet(packet, sub4.as_ref(),tui_mutex_cl.clone()) ,
