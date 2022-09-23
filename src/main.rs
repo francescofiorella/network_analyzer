@@ -1,6 +1,6 @@
 use std::io::stdin;
 use std::process::Command;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
@@ -115,7 +115,7 @@ fn state_win_init() -> Window {
 
 pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>) {
     if tui_window.is_some() {
-        let mg = tui_mutex.lock().unwrap(); //drop at the end of the block
+        let _mg = tui_mutex.lock().unwrap(); //drop at the end of the block
         tui_window.as_ref().unwrap().attron(A_BOLD);
         tui_window.as_ref().unwrap().attron(COLOR_PAIR(2));
         tui_window.as_ref().unwrap().printw(p.to_string_mac());
@@ -148,7 +148,7 @@ fn print_state(state_window: Option<&Window> , state: &NAState, tui_mutex: Arc<M
 
     match state_window {
         Some(sw) => {
-            let mg = tui_mutex.lock().unwrap(); //release at end of the block
+            let _mg = tui_mutex.lock().unwrap(); //release at end of the block
             sw.clear();
             sw.draw_box(0, 0);
             sw.mvprintw(1, 22, msg);
