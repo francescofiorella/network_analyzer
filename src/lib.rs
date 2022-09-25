@@ -7,7 +7,7 @@ pub mod sniffer {
     use std::thread::{JoinHandle, sleep, spawn};
     use std::time::Duration;
     use pcap::Error::TimeoutExpired;
-    use crate::sniffer::channel::SnifferChannel;
+    use crate::sniffer::channel::{Message, SnifferChannel};
     use crate::sniffer::filter::get_filter;
     use crate::sniffer::format::get_file_name;
     use crate::sniffer::na_error::NAError;
@@ -200,13 +200,6 @@ pub mod sniffer {
             t1.join().unwrap();
             t2.join().unwrap();
         }
-    }
-
-    #[derive(Clone)]
-    pub enum Message {
-        Error(NAError),
-        State(NAState),
-        Packet(NAPacket),
     }
 
     pub mod na_packet {
@@ -922,9 +915,18 @@ pub mod sniffer {
         }
     }
 
-    mod channel {
+    pub mod channel {
         use std::sync::mpsc::{channel, Receiver, Sender};
-        use crate::sniffer::Message;
+        use crate::sniffer::na_error::NAError;
+        use crate::sniffer::na_packet::NAPacket;
+        use crate::sniffer::na_state::NAState;
+
+        #[derive(Clone)]
+        pub enum Message {
+            Error(NAError),
+            State(NAState),
+            Packet(NAPacket),
+        }
 
         pub(crate) struct SnifferChannel {
             senders: Vec<Sender<Message>>,
