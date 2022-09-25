@@ -39,7 +39,6 @@ pub mod sniffer {
 
     impl Sniffer {
 
-        #[allow(unused_assignments)] //DA RIMUOVERE IN FASE DI DEBUG
         pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError> {
             let report_file_name = get_file_name(output.clone());
             let report_file_name_cl = report_file_name.clone();
@@ -106,7 +105,7 @@ pub mod sniffer {
                                         .promisc(true)
                                         .open()
                                         .unwrap();
-                                    //drop(mg);
+                                    drop(mg);
                                     continue;
                                 } else if mg.0.is_stopped() {
                                     break;
