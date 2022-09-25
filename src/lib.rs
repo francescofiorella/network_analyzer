@@ -752,37 +752,6 @@ pub mod sniffer {
         }
 
         pub(crate) fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
-            fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
-                for packet in packets {
-                    // controlla il socket del pacchetto
-                    if stats.is_empty() {
-                        let stat = Stats::new(packet.clone());
-                        stats.push(stat);
-                    } else {
-                        let first_socket = (packet.source_address.clone(), packet.source_port.clone());
-                        let second_socket = (packet.destination_address.clone(), packet.destination_port.clone());
-                        // check if the socket is contained in old_stats
-                        let mut modified = false;
-                        'inner: for stat in stats.iter_mut() {
-                            if stat.sockets.contains(&first_socket)
-                                && stat.sockets.contains(&second_socket)
-                                && stat.transported_protocol == packet.transported_protocol
-                                && stat.l3_protocol == packet.level_three_type
-                            {
-                                stat.total_bytes += packet.total_length as u128;
-                                stat.last_timestamp = packet.timestamp;
-                                modified = true;
-                                break 'inner;
-                            }
-                        }
-                        if !modified {
-                            let stat = Stats::new(packet.clone());
-                            stats.push(stat);
-                        }
-                    }
-                }
-                stats
-            }
             // define the path
             let vec = produce_stats(stats, packets);
 
@@ -867,6 +836,39 @@ pub mod sniffer {
             }*/
             vec
         }
+
+        fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
+            for packet in packets {
+                // controlla il socket del pacchetto
+                if stats.is_empty() {
+                    let stat = Stats::new(packet.clone());
+                    stats.push(stat);
+                } else {
+                    let first_socket = (packet.source_address.clone(), packet.source_port.clone());
+                    let second_socket = (packet.destination_address.clone(), packet.destination_port.clone());
+                    // check if the socket is contained in old_stats
+                    let mut modified = false;
+                    'inner: for stat in stats.iter_mut() {
+                        if stat.sockets.contains(&first_socket)
+                            && stat.sockets.contains(&second_socket)
+                            && stat.transported_protocol == packet.transported_protocol
+                            && stat.l3_protocol == packet.level_three_type
+                        {
+                            stat.total_bytes += packet.total_length as u128;
+                            stat.last_timestamp = packet.timestamp;
+                            modified = true;
+                            break 'inner;
+                        }
+                    }
+                    if !modified {
+                        let stat = Stats::new(packet.clone());
+                        stats.push(stat);
+                    }
+                }
+            }
+            stats
+        }
+
     }
 
     pub mod na_state {
