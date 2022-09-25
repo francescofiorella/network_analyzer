@@ -33,6 +33,20 @@ pub mod sniffer {
         Ok(device)
     }
 
+    ///The struct `Sniffer` initializes the sniffing and reporting process, by
+    ///* Finding the `pcap::Device` associated to the given `adapter`
+    ///* Properly setting up (in promisc mode) and activating a `pcap::Capture` on the given `adapter`.
+    ///* Associating (if possible) the given `filter` string to a `network_analyzer::Filter` tag
+    ///* Creating a `network_analyzer::channel::SnifferChannel` to transfer informations from the
+    ///internal threads to the subscribed one (where the Sniffer is created).
+    ///
+    ///
+    ///Moreover, the struct `Sniffer` is responsible for the initialization of two threads:
+    /// 1) <i>timer_thread</i>: while the sniffer isn't paused/stopped, every `update_time` milliseconds, updates the sniffing report contained in a `output` (.xml and .md) file
+    /// 2) <i>sniffing_thread</i>: while the sniffer isn't paused/stopped, waits for the capturing of a packet, takes the captured `pcap::Packet`, transforms it in a readable `NAPacket`, filters it (following the given `filter`) and eventually transfers it to the subscribed thread(s) via `SnifferChannel`.
+    ///
+    /// The `Sniffer` also implements the `Drop` trait, so that the `drop(&mut self)` function waits for the proper termination
+    /// of the two threads initialized by the struct.
     pub struct Sniffer {
         m: Arc<Mutex<(NAState, Vec<NAPacket>, Vec<Stats>, SnifferChannel)>>,
         jh: Option<(JoinHandle<()>, JoinHandle<()>)>,
@@ -44,21 +58,6 @@ pub mod sniffer {
 
         ///Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String),
         /// output file update time (u64), filter (String)) or returns an `NAError`.
-        ///
-        ///The struct `Sniffer` initializes the sniffing and reporting process, by
-        ///* Finding the `pcap::Device` associated to the given `adapter`
-        ///* Properly setting up (in promisc mode) and activating a `pcap::Capture` on the given `adapter`.
-        ///* Associating (if possible) the given `filter` string to a `network_analyzer::Filter` tag
-        ///* Creating a `network_analyzer::channel::SnifferChannel` to transfer informations from the
-        ///internal threads to the subscribed one (where the Sniffer is created).
-        ///
-        ///
-        ///Moreover, the struct `Sniffer` is responsible for the initialization of two threads:
-        /// 1) <i>timer_thread</i>: while the sniffer isn't paused/stopped, every `update_time` milliseconds, updates the sniffing report contained in a `output` (.xml and .md) file
-        /// 2) <i>sniffing_thread</i>: while the sniffer isn't paused/stopped, waits for the capturing of a packet, takes the captured `pcap::Packet`, transforms it in a readable `NAPacket`, filters it (following the given `filter`) and eventually transfers it to the subscribed thread(s) via `SnifferChannel`.
-        ///
-        /// The `Sniffer` also implements the `Drop` trait, so that the `drop(&mut self)` function waits for the proper termination
-        /// of the two threads initialized by the struct.
 
         pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError> {
             let report_file_name = get_file_name(output.clone());
