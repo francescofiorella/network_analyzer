@@ -1,5 +1,3 @@
-extern crate core;
-
 pub mod sniffer {
     use pcap::{Capture, Device};
     use std::sync::{Arc, Condvar, Mutex};
