@@ -227,6 +227,10 @@ pub mod sniffer {
             mg.3.subscribe()
         }
 
+        /// Returns the current state of the sniffer.
+        ///
+        /// This method tries to acquire the inner Mutex, so it blocks until it is free.
+        /// Then the NAState is cloned and returned.
         pub fn get_state(&self) -> NAState {
             self.m.lock().unwrap().0.clone()
         }
@@ -654,6 +658,22 @@ pub mod sniffer {
                 }.to_string()
             }
 
+            /// Slides the IPv6 headers until it finds another protocol, so it returns a pair
+            /// composed by the transported protocol's name and the index of the first byte
+            /// of its header.
+            ///
+            /// This function gets two arguments:
+            /// * The packet to be processed as an array of u8.
+            /// * A pair composed by the "next header index" which refers to the first byte
+            /// of the next header to be processed and by the "remaining size" which is the
+            /// remaining dimension (in bytes) of the header.
+            ///
+            /// The function slides the IPv6 header until it finds the "Next Header" field,
+            /// if it indicates an IPv6 Extension Header, it calculates the remaining length
+            /// of the first header and then calls again the function (in a recursive call),
+            /// otherwise it calls `to_transported_protocol(prot_num)` and returns.
+            ///
+            /// It panics if the index exceed the array length.
             pub(crate) fn get_ipv6_transported_protocol(p: &[u8], (next_header_index, remaining_size): (usize, usize)) -> (String, usize) {
                 let new_start = next_header_index + remaining_size;
                 match p[next_header_index] {
@@ -791,6 +811,18 @@ pub mod sniffer {
         use crate::sniffer::na_packet::NAPacket;
         use std::io::Write;
 
+        /// The `Stats` type.
+        ///
+        /// It is used to store information about the (ISO/OSI) level four packet flow,
+        /// needed to produce the sniffer report.
+        ///
+        /// It contains:
+        /// * The pair of socket
+        /// * The level three protocol's name
+        /// * The transported protocol's name
+        /// * The flow's total number of bytes
+        /// * The timestamp of the first packet received
+        /// * The timestamp of the last packet received
         #[derive(Debug, Clone)]
         pub(crate) struct Stats {
             sockets: [(Option<String>, Option<u16>); 2],
@@ -802,6 +834,13 @@ pub mod sniffer {
         }
 
         impl Stats {
+            /// Creates a new `Stats` from a `NAPacket`.
+            ///
+            /// This method extracts the needed field from the packet and populate
+            /// the new object, by using the timestamp twice, both for the first
+            /// and last packet fields.
+            ///
+            /// It is typically used by passing as argument the first packet of a flow.
             pub(crate) fn new(packet: NAPacket) -> Self {
                 Stats {
                     sockets: [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
@@ -814,6 +853,17 @@ pub mod sniffer {
             }
         }
 
+        /// Produces two report files (<i>.xml</i> and <i>.md</i>) and returns the updated
+        /// vector of `Stats`.
+        ///
+        /// The function takes as argument two file name (one for each format), a vector of
+        /// packets and a vector of (old) stats; these are used to produce an updated version
+        /// of the stats by calling the function `produce_stats(stats, packets)`.<br>
+        /// Then, it creates the files and writes them by using the `writeln!` macro.<br>
+        /// At the end, it returns the updated stats.
+        ///
+        /// It panics if it is unable to write correctly the files and show the message
+        /// `"Unable to write the report file!"`.
         pub(crate) fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
             // define the path
             let vec = produce_stats(stats, packets);
@@ -900,6 +950,18 @@ pub mod sniffer {
             vec
         }
 
+        /// Produces an updated version of the stats and returns a vector of `Stats` objects.
+        ///
+        /// This function takes as argument a vector of old stats and a vector of packets
+        /// to be processed and added.
+        ///
+        /// It slides the packets, checks if its pair of socket is already recorded
+        /// in the stats, then it updates the relative `Stats` object by adding the
+        /// number of bytes and replacing the last packet timestamp.<br>
+        /// Otherwise, it creates a new object by calling the `new(packet)` static
+        /// function of `Stats`.
+        ///
+        /// At the end, it returns the updated vector of stats.
         fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats> {
             for packet in packets {
                 // controlla il socket del pacchetto
