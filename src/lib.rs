@@ -408,7 +408,6 @@ pub mod sniffer {
                     58 => "ICMPv6", // ICMP for IPv6
                     59 => "NoNxt", // No Next Header [IPv6]
 
-                    // Da verificare
                     3 => "GGP", // Gateway-to-Gateway Protocol
                     5 => "ST", // Internet Stream Protocol
                     7 => "CBT", // Core-based trees
