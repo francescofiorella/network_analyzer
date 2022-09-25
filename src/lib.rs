@@ -222,6 +222,12 @@ pub mod sniffer {
             self.cv.notify_all();
         }
 
+        /// Returns a `Receiver<Message>`.<br>
+        /// It can be used to receive all the updates from the `Sniffer`.
+        ///
+        /// This method tries to acquire the inner Mutex, so it blocks until it is free.
+        /// Then it calls the `subscribe()` function of the `SnifferChannel` and returns
+        /// the new receiver.
         pub fn subscribe(&mut self) -> Receiver<Message> {
             let mut mg = self.m.lock().unwrap();
             mg.3.subscribe()
@@ -1052,6 +1058,10 @@ pub mod sniffer {
         use crate::sniffer::na_packet::NAPacket;
         use crate::sniffer::na_state::NAState;
 
+        /// The `Message` type.
+        ///
+        /// It is an enumeration that contains the message sent in the `SnifferChannel`,
+        /// that can be either a `NAError`, a `NAState` or a `NAPacket`.
         #[derive(Clone)]
         pub enum Message {
             Error(NAError),
@@ -1059,21 +1069,38 @@ pub mod sniffer {
             Packet(NAPacket),
         }
 
+        /// The `SnifferChannel` type.
+        ///
+        /// It is used to let the sniffer communicate with its subscribers by sending messages.<br>
+        /// It contains a vector of `Sender<Message>`, one for each subscriber.
         pub(crate) struct SnifferChannel {
             senders: Vec<Sender<Message>>,
         }
 
         impl SnifferChannel {
+            /// Creates a new `SnifferChannel` object and populate it with an empty array
+            /// of senders.
             pub(crate) fn new() -> Self {
                 SnifferChannel { senders: Vec::new() }
             }
 
+            /// Creates a new communication channel and returns the receiver.
+            ///
+            /// This method use the `std::sync::mpsc::channel()` function to create
+            /// a `Sender`, which will be added to the `SnifferChannel` and a `Receiver`,
+            /// which will be returned to the subscriber.
             pub(crate) fn subscribe(&mut self) -> Receiver<Message> {
                 let (sx, rx) = channel::<Message>();
                 self.senders.push(sx);
                 rx
             }
 
+            /// Sends a `Message` to all the subscribers.
+            ///
+            /// The method slides the senders vector and checks if each of them is still valid.<br>
+            /// It calls the `send(message)` method of the `Sender` that attempts to send the
+            /// message and returns an error if the `Receiver` has been already deallocated.<br>
+            /// In this case, the sender is removed from the vector.
             pub(crate) fn send(&mut self, message: Message) {
                 let mut i = 0;
                 loop {
