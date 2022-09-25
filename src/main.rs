@@ -10,6 +10,7 @@ use pcap::Device;
 use network_analyzer::sniffer::{get_adapter, Sniffer};
 use network_analyzer::sniffer::channel::Message;
 use network_analyzer::sniffer::filter::{Filter, get_filter};
+use network_analyzer::sniffer::na_error::NAError;
 use network_analyzer::sniffer::na_packet::NAPacket;
 use network_analyzer::sniffer::na_state::NAState;
 use network_analyzer::sniffer::na_state::NAState::{PAUSED, RESUMED, STOPPED};
@@ -140,7 +141,7 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mut
     }
 }
 
-fn print_state(state_window: Option<&Window> , state: &NAState, tui_mutex: Arc<Mutex<()>>) {
+fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mutex<()>>) {
     let msg = match state {
         PAUSED => PAUSE,
         STOPPED => QUIT,
@@ -159,6 +160,21 @@ fn print_state(state_window: Option<&Window> , state: &NAState, tui_mutex: Arc<M
         None => println!("{}", msg),
     }
 }
+
+fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mutex: Arc<Mutex<()>>) {
+    if tui_enabled {
+        let _mg = tui_mutex.lock().unwrap(); //drop at the end of the block
+        sub4.as_ref().unwrap().clear();
+        sub4.as_ref().unwrap().printw(error.to_string().as_str());
+        sub4.as_ref().unwrap().printw("\n");
+        sub4.as_ref().unwrap().printw("Press any key to quit");
+        sub4.as_ref().unwrap().refresh();
+    } else {
+        println ! ("ERROR: {}", error);
+        println !("Press any key + \"Enter\" to quit")
+    }
+}
+
 
 fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, tui_mutex: Arc<Mutex<()>>) {
     if tui {
@@ -206,9 +222,8 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
                 index += 2;
                 index as i32
             };
-            
+
             sub1.mvprintw(y, 2, command);
-            
         }
 
         sub1.refresh();
@@ -241,7 +256,7 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
         match running {
             0 => {
                 sniffer.pause();
-                print_state(state_window.as_ref(), &PAUSED, tui_mutex.clone() );
+                print_state(state_window.as_ref(), &PAUSED, tui_mutex.clone());
             }
             1 => {
                 sniffer.resume();
@@ -287,8 +302,8 @@ fn notui_event_handler(sniffer: &mut Sniffer) {
 fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
     let _mg = tui_mutex.lock().unwrap();
     window.clear();
-    
-    if cfg!(target_os = "macos") || cfg!(target_os = "linux"){
+
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
         window.attron(A_BOLD);
     }
 
@@ -300,7 +315,7 @@ fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
     window.mvprintw(9, 25, "/_/    \\____/\\____/");
     window.attroff(COLOR_PAIR(2));
     window.attron(COLOR_PAIR(3));
-    window.mvprintw(9,55,  "__");
+    window.mvprintw(9, 55, "__");
     window.mvprintw(10, 15, "   ____  ___  / /__      ______  _____/ /__");
     window.mvprintw(11, 15, "  / __ \\/ _ \\/ __/ | /| / / __ \\/ ___/ //_/");
     window.mvprintw(12, 15, " / / / /  __/ /_ | |/ |/ / /_/ / /  / , |");
@@ -312,9 +327,9 @@ fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
     window.mvprintw(16, 15, " / /_/ / / / / /_/ / / /_/ / / //  __/ /    ");
     window.mvprintw(17, 15, " \\__,_/_/ /_/\\__,_/_/\\__, / /___|___/_/");
     window.mvprintw(18, 15, "                    /____/");
-    
-    if cfg!(target_os = "macos") || cfg!(target_os = "linux"){
-    window.attroff(A_BOLD);
+
+    if cfg!(target_os = "macos") || cfg!(target_os = "linux") {
+        window.attroff(A_BOLD);
     }
 
     window.attroff(COLOR_PAIR(5));
@@ -371,24 +386,16 @@ fn main() {
             loop {
                 match receiver.recv() {
                     Ok(Message::Error(err)) => {
-                        if tui_enabled {
-                            sub4.as_ref().unwrap().clear();
-                            sub4.as_ref().unwrap().printw(err.to_string().as_str());
-                            sub4.as_ref().unwrap().printw("\n");
-                            sub4.as_ref().unwrap().printw("Press any key to quit");
-                            sub4.as_ref().unwrap().refresh();
-                        } else {
-                            println!("ERROR: {}", err);
-                            println!("Press any key + \"Enter\" to quit")
-                        }
+                        print_error(sub4.as_ref(), err, tui_enabled, tui_mutex_cl.clone());
                         break;
                     }
                     Ok(Message::State(state)) => {
                         if state.is_stopped() {
                             print_closing(sub4.as_ref().unwrap(), tui_mutex_cl.clone());
-                            break; }
+                            break;
+                        }
                     }
-                    Ok(Message::Packet(packet)) =>  print_packet(packet, sub4.as_ref(),tui_mutex_cl.clone()) ,
+                    Ok(Message::Packet(packet)) => print_packet(packet, sub4.as_ref(), tui_mutex_cl.clone()),
                     Err(_) => break
                 }
             }

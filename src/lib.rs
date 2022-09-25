@@ -36,7 +36,6 @@ pub mod sniffer {
     }
 
     impl Sniffer {
-
         pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError> {
             let report_file_name = get_file_name(output.clone());
             let report_file_name_cl = report_file_name.clone();
@@ -295,8 +294,8 @@ pub mod sniffer {
             pub fn to_string_endpoints(&self) -> String {
                 let mut s = String::new();
                 let mut space = "\t ";
-                if option_to_string(self.source_address.clone()) == "None"{
-                    space="\t\t "
+                if option_to_string(self.source_address.clone()) == "None" {
+                    space = "\t\t "
                 }
                 s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone()) + space
                     + &*" IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
@@ -616,7 +615,7 @@ pub mod sniffer {
         }
     }
 
-    mod na_error {
+    pub mod na_error {
         use std::error::Error;
         use std::fmt::{Display, Formatter};
 
@@ -858,7 +857,6 @@ pub mod sniffer {
             }
             stats
         }
-
     }
 
     pub mod na_state {
