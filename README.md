@@ -2,7 +2,63 @@
 
 ## Application
 
-## Library
+### Pictures of FCC Network Analyzer v1.0
+
+<img src="./screenshots/screenshot_1.png" alt="screenshot" width="500"/> <img src="./screenshots/screenshot_2.png" alt="screenshot" width="500"/>
+
+### CLI Arguments:
+* `--adapter (-a):` u8 number (default 1) associated to an adapter according to a list that can be shown passing `-l` or `--list-adapters` as argument
+* `--output (-o)`: String (default "report") defining the name of the output file (.md / .xml where the report is written)
+* `--update-time (-u)`: u64 number (default 10000) defining the output file update time (in milliseconds)
+* `--filter (-f)`: String (default "None") defining a packet filter
+* `--tui (-t)`: bool (default "false") enabling the `tui mode`
+* `--list-adapters (-l)`: bool (default "false") showing the list of available network adapters to be sniffed, together with the associated index.
+
+### Functions explanation
+
+```rust
+pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>)
+```
+Prints a received `NAPacket`:
+ * on a given `pancurses::Window` according to a proper format if the application is run in `--tui` mode
+ * to the stdout (by means of the `Display` trait implemented by the struct `NAPacket`) in the other cases
+The passed parameters are:
+1) `NAPacket` to print
+2) Optional `pancurses::Window` if the application is run in `--tui` mode (None otherwise)
+3) `Arc<Mutex<()>>` to synchronize the writing operations on the tui (in case of `--tui` mode)
+
+```rust
+fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mutex<()>>)
+```
+Refreshes the state window with the current `Sniffer`'s state
+Everytime a 'state change message' is sent from the Sniffer object, the tui's state window is refreshed
+
+```rust
+fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui_mutex: Arc<Mutex<()>>)
+```
+1) Defines the commands to be shown in the tui's command window
+2) Prints the command window and enables the arrow keys
+3) Waits in loop (through a blocking getch) for user user commands (arrow key pressure / enter)
+4) Calls the function associated to the selected command
+
+```rust
+fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>)
+```
+Prints the application logo on a given `pancurses::Window`
+
+### main
+
+The first action performed by the main is the parsing of the main arguments (via `Parser` derived by `clap` library).
+
+In `--list-adapters (-l)` mode, only the list of available network adapters (together with the associated index) is shown.
+
+ Otherwise, the main:
+1) checks if the `--tui (-t)` mode has been activated
+2) creates a `network_adapter::sniffer::Sniffer` object, properly configured by passing the main arguments as parameters to the constructor
+3) if the `tui mode` is enabled, properly initializes the tui layout and content on the terminal
+4) subscribes to the `SnifferChannel` associated to the `Sniffer` object, in order to listen for packets, state change messages or errors (`network_analyzer::sniffer::Message`).
+
+## Network Analyzer Library
 
 ### network_analyzer::sniffer
 
