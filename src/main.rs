@@ -15,7 +15,13 @@ use network_analyzer::sniffer::na_packet::NAPacket;
 use network_analyzer::sniffer::na_state::NAState;
 use network_analyzer::sniffer::na_state::NAState::{PAUSED, RESUMED, STOPPED};
 
-
+///Struct defining the arguments that can be passed to the main:
+/// * `--adapter (-a):` u8 number (default 1) associated to an adapter according to a list that can be shown passing `-l` or `--list-adapters` as argument
+/// * `--output (-o)`: String (default "report") defining the name of the output file (.md / .xml where the report is written)
+/// * `--update-time (-u)`: u64 number (default 10000) defining the output file update time (in milliseconds)
+/// * `--filter (-f)`: String (default "None") defining a packet filter
+/// * `--tui (-t)`: bool (default "false") enabling the `tui mode`
+/// * `--list-adapters (-l)`: bool (default "false") showing the list of available network adapters to be sniffed, together with the associated index.
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
@@ -115,6 +121,15 @@ fn state_win_init() -> Window {
     state_window
 }
 
+/// Prints a received `NAPacket`:
+/// * on a given `pancurses::Window` according to a proper format if the application is run in `--tui` mode
+/// * to the stdout (by means of the `Display` trait implemented by the struct `NAPacket`) in the other cases
+///
+///The passed parameters are:
+///
+///1) `NAPacket` to print
+///2) Optional `pancurses::Window` if the application is run in `--tui` mode (None otherwise)
+///3) `Arc<Mutex<()>>` to synchronize the writing operations on the tui (in case of `--tui` mode)
 pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>) {
     if tui_window.is_some() {
         let _mg = tui_mutex.lock().unwrap(); //drop at the end of the block
@@ -141,6 +156,9 @@ pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mut
     }
 }
 
+///Refreshes the state window with the current `Sniffer`'s state
+///
+///Everytime a 'state change message' is sent from the Sniffer object, the tui's state window is refreshed
 fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mutex<()>>) {
     let msg = match state {
         PAUSED => PAUSE,
@@ -185,6 +203,10 @@ fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_win
     }
 }
 
+///1) Defines the commands to be shown in the tui's command window
+///2) Prints the command window and enables the arrow keys
+///3) Waits in loop (through a blocking getch) for user user commands (arrow key pressure / enter)
+///4) Calls the function associated to the selected command
 fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui_mutex: Arc<Mutex<()>>) {
     //commands definition
     let commands = vec![
@@ -299,6 +321,7 @@ fn notui_event_handler(sniffer: &mut Sniffer) {
     }
 }
 
+///Prints the application logo on a given `pancurses::Window`
 fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
     let _mg = tui_mutex.lock().unwrap();
     window.clear();
@@ -336,6 +359,15 @@ fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
     window.refresh();
 }
 
+///The first action performed by the main is the parsing of the main arguments (via `Parser` derived by `clap` library).
+///
+///In `--list-adapters (-l)` mode, only the list of available network adapters (together with the associated index) is shown.
+///
+/// Otherwise, the main:
+///1) checks if the `--tui (-t)` mode has been activated
+///2) creates a `network_adapter::sniffer::Sniffer` object, properly configured by passing the main arguments as parameters to the constructor
+///3) if the `tui mode` is enabled, properly initializes the tui layout and content on the terminal
+///4) subscribes to the `SnifferChannel` associated to the `Sniffer` object, in order to listen for packets, state change messages or errors (`network_analyzer::sniffer::Message`).
 fn main() {
     let args = Args::parse();
 
