@@ -18,6 +18,22 @@
 ### Functions explanation
 
 ```rust
+fn notui_show_commands()
+```
+
+Prints on the terminal the list of commands.
+
+These commands can be used to control the sniffing process and are:
+* P to Pause
+* R to Resume
+* Q to Quit
+
+This function uses the println! macro and waits for 3 seconds before returning.<br>
+In this way, the user can correctly visualize the list, independently of the following
+operations.<br>
+At the end, a "sniffing start" message is shown.
+
+```rust
 pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>)
 ```
 Prints a received `NAPacket`:
@@ -33,6 +49,19 @@ fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mu
 ```
 Refreshes the state window with the current `Sniffer`'s state
 Everytime a 'state change message' is sent from the Sniffer object, the tui's state window is refreshed
+
+```rust
+fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, tui_mutex: Arc<Mutex<()>>)
+```
+
+Calls `tui_event_handler(...)` or `notui_event_handler(...)` depending on the tui boolean
+argument received.
+
+This function starts the main loop that listen to the tui or to the terminal stdin.<br>
+It accept as parameters a `sniffer` reference and a `tui` boolean.<br>
+The other parameters are "optional" and are used only in case of a tui based call.<br>
+These are the `main_window` and the `state_window` which are of type `Option<Window>` and a
+`tui_mutex`, used to synchronize the tui updates.
 
 ```rust
 fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui_mutex: Arc<Mutex<()>>)
