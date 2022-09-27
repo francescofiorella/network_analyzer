@@ -2,7 +2,7 @@
 
 ## Application
 
-### Pictures of FCC Network Analyzer v1.0
+### Pictures of FCC Network Analyzer v1.0, in tui mode
 
 <img src="./screenshots/screenshot_1.png" alt="screenshot" width="500"/>
 <img src="./screenshots/screenshot_2.png" alt="screenshot" width="500"/>
