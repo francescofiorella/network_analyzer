@@ -820,7 +820,8 @@ pub mod sniffer {
         /// The `Stats` type.
         ///
         /// It is used to store information about the (ISO/OSI) level four packet flow,
-        /// needed to produce the sniffer report.
+        /// needed to produce the sniffer report.<br>
+        /// This type implements the `Debug` and `Clone` traits.
         ///
         /// It contains:
         /// * The pair of socket
@@ -1058,17 +1059,6 @@ pub mod sniffer {
         use crate::sniffer::na_packet::NAPacket;
         use crate::sniffer::na_state::NAState;
 
-        /// The `Message` type.
-        ///
-        /// It is an enumeration that contains the message sent in the `SnifferChannel`,
-        /// that can be either a `NAError`, a `NAState` or a `NAPacket`.
-        #[derive(Clone)]
-        pub enum Message {
-            Error(NAError),
-            State(NAState),
-            Packet(NAPacket),
-        }
-
         /// The `SnifferChannel` type.
         ///
         /// It is used to let the sniffer communicate with its subscribers by sending messages.<br>
@@ -1114,6 +1104,18 @@ pub mod sniffer {
                     }
                 }
             }
+        }
+
+        /// The `Message` type.
+        ///
+        /// It is an enumeration that contains the message sent in the `SnifferChannel`,
+        /// that can be either a `NAError`, a `NAState` or a `NAPacket`.<br>
+        /// This type implements the `Clone` trait.
+        #[derive(Clone)]
+        pub enum Message {
+            Error(NAError),
+            State(NAState),
+            Packet(NAPacket),
         }
     }
 }
