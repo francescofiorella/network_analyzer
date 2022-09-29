@@ -821,6 +821,7 @@ pub mod sniffer {
         ///* "192.168.1.1" can be associated to  `Filter::IP(String)`
         ///* "2001:db8::2:1" can be associated to a `Filter::IP(String)`
         ///* "foo.192 foo" cannot be associated to any filter
+        /// * ">=1514" can be associated to a `Filter::GE(u16)`
         pub fn get_filter(filter: &String) -> Result<Filter, NAError> {
             //Actually available filters
             let f = filter.as_str();
