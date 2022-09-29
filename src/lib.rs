@@ -299,6 +299,39 @@ pub mod sniffer {
                             source_port = Some(to_u16(&pcap_packet, 34));
                             destination_port = Some(to_u16(&pcap_packet, 36));
                         }
+
+                        //UDP
+                        if prot_num == 17 {
+                            match (source_port.unwrap(),destination_port.unwrap()) {
+                                (53,_) => transported_protocol = Some("UDP (DNS Response)".to_string()),
+                                (_,53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
+                                (67,_) | (_,67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
+                                (68,_) | (_,68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
+                                _ => () ,
+                            }
+                        }
+
+                        //TCP
+                        if prot_num == 6 {
+                            match (source_port.unwrap(),destination_port.unwrap()) {
+                                (20,_) | (_,20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
+                                (21,_) | (_,21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
+                                (22,_) | (_,22) => transported_protocol = Some("TCP (SSH)".to_string()),
+                                (23,_) | (_,23) => transported_protocol = Some("TCP (Telnet)".to_string()),
+                                (25,_) | (_,25) => transported_protocol = Some("TCP (SMTP)".to_string()),
+                                (80,_) | (_,80) => transported_protocol = Some("TCP (HTTP)".to_string()),
+                                (110,_) | (_,110) => transported_protocol = Some("TCP (POP)".to_string()),
+                                (143,_) | (_,143) => transported_protocol = Some("TCP (IMAP4)".to_string()),
+                                (443,_) | (_,443) => transported_protocol = Some("TCP (HTTPS)".to_string()),
+                                (465,_) | (_,465) => transported_protocol = Some("TCP (SMTPS)".to_string()),
+                                (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
+                                (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
+                                (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                _ => () ,
+                            }
+                        }
+
+
                     }
                     // IPv6
                     0x86DD => {
@@ -365,7 +398,7 @@ pub mod sniffer {
                 let mut s = String::new();
                 s.push_str(&*("L3_type: ".to_owned() + &self.level_three_type.to_string()
                     + &*" Len: ".to_owned() + &self.total_length.to_string()
-                    + &*" L4_Prot: ".to_owned() + &option_to_string(self.transported_protocol.clone())
+                    + &*" Prot: ".to_owned() + &option_to_string(self.transported_protocol.clone())
                     + &*" TS: ".to_owned() + &self.timestamp.to_string()));
                 s
             }
