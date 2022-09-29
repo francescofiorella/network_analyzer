@@ -121,7 +121,7 @@ fn state_win_init() -> Window {
     state_window
 }
 
-/// Prints a received `NAPacket`:
+///Prints a received `NAPacket`:
 /// * on a given `pancurses::Window` according to a proper format if the application is run in `--tui` mode
 /// * to the stdout (by means of the `Display` trait implemented by the struct `NAPacket`) in the other cases
 ///
@@ -338,7 +338,7 @@ fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
     window.mvprintw(9, 25, "/_/    \\____/\\____/");
     window.attroff(COLOR_PAIR(2));
     window.attron(COLOR_PAIR(3));
-    window.mvprintw(9, 55, "__");
+    window.mvprintw(9, 54, "__");
     window.mvprintw(10, 15, "   ____  ___  / /__      ______  _____/ /__");
     window.mvprintw(11, 15, "  / __ \\/ _ \\/ __/ | /| / / __ \\/ ___/ //_/");
     window.mvprintw(12, 15, " / / / /  __/ /_ | |/ |/ / /_/ / /  / , |");
@@ -423,7 +423,9 @@ fn main() {
                     }
                     Ok(Message::State(state)) => {
                         if state.is_stopped() {
-                            print_closing(sub4.as_ref().unwrap(), tui_mutex_cl.clone());
+                            if tui_enabled {
+                                print_closing(sub4.as_ref().unwrap(), tui_mutex_cl.clone());
+                            }
                             break;
                         }
                     }
