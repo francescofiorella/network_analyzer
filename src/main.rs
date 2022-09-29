@@ -422,7 +422,7 @@ fn main() {
 
         if tui_enabled {
             let device_name = get_adapter(args.adapter).unwrap().name;
-            let filter = get_filter(&args.filter.to_ascii_lowercase()).unwrap();
+            let filter = get_filter(&args.filter.trim().to_ascii_lowercase()).unwrap();
             main_window = Some(tui_init(&device_name, &filter, &args.output, args.update_time));
             let s_w = state_win_init();
             state_window = Some(s_w);

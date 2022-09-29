@@ -65,7 +65,7 @@ pub mod sniffer {
             let report_file_name_cl_2 = report_file_name.clone();
 
             let device = get_adapter(adapter)?;
-            let enum_filter = get_filter(&filter.to_ascii_lowercase())?;
+            let enum_filter = get_filter(&filter.trim().to_ascii_lowercase())?;
 
             let sniffer_channel = SnifferChannel::new();
 
@@ -433,7 +433,18 @@ pub mod sniffer {
                             return port == self.source_port.unwrap() || port == self.destination_port.unwrap();
                         }
                         false
-                    }
+                    },
+
+                    Filter::LT(len) => self.total_length < len as u32,
+
+                    Filter::LE(len) => self.total_length <= len as u32,
+
+                    Filter::EQ(len) => self.total_length == len as u32,
+
+                    Filter::GT(len) => self.total_length > len as u32,
+
+                    Filter::GE(len) => self.total_length >= len as u32,
+
                     _ => false,
                 }
             }
@@ -770,6 +781,11 @@ pub mod sniffer {
             ARP,
             IP(String),
             Port(u16),
+            LT(u16),
+            LE(u16),
+            EQ(u16),
+            GT(u16),
+            GE(u16)
         }
 
         impl ToString for Filter {
@@ -784,7 +800,12 @@ pub mod sniffer {
                         let mut s = String::from("port ");
                         s.push_str(&port.to_string());
                         s
-                    }
+                    },
+                    Filter::LT(len) => ("length < ".to_owned() + len.to_string().as_str()).to_string(),
+                    Filter::LE(len) => ("length <= ".to_owned() + len.to_string().as_str()).to_string(),
+                    Filter::EQ(len) => ("length = ".to_owned() + len.to_string().as_str()).to_string(),
+                    Filter::GT(len) => ("length > ".to_owned() + len.to_string().as_str()).to_string(),
+                    Filter::GE(len) => ("length >= ".to_owned() + len.to_string().as_str()).to_string(),
                 }
             }
         }
@@ -839,6 +860,59 @@ pub mod sniffer {
 
                 //port
                 string if string.parse::<u16>().is_ok() => Ok(Filter::Port(string.parse::<u16>().unwrap())),
+
+                //length (le)
+                string if string.starts_with("<=") => {
+                    let mut string = string.to_string();
+                    string.remove(0);
+                    string.remove(0);
+                    match string.parse::<u16>() {
+                        Err(_) => Err(NAError::new("Not a valid packet length")),
+                        Ok(len) => Ok(Filter::LE(len))
+                    }
+                },
+
+                //length (ge)
+                string if string.starts_with(">=") => {
+                    let mut string = string.to_string();
+                    string.remove(0);
+                    string.remove(0);
+                    match string.parse::<u16>() {
+                        Err(_) => Err(NAError::new("Not a valid packet length")),
+                        Ok(len) => Ok(Filter::GE(len))
+                    }
+                },
+
+                //length (eq)
+                string if string.starts_with("=") => {
+                    let mut string = string.to_string();
+                    string.remove(0);
+                    match string.parse::<u16>() {
+                        Err(_) => Err(NAError::new("Not a valid packet length")),
+                        Ok(len) => Ok(Filter::EQ(len))
+                    }
+                },
+                //length (gt)
+                string if string.starts_with(">") => {
+                    let mut string = string.to_string();
+                    string.remove(0);
+                    match string.parse::<u16>() {
+                        Err(_) => Err(NAError::new("Not a valid packet length")),
+                        Ok(len) => Ok(Filter::GT(len))
+                    }
+                },
+
+                //length (lt)
+                string if string.starts_with("<") => {
+                    let mut string = string.to_string();
+                    string.remove(0);
+                    match string.parse::<u16>() {
+                        Err(_) => Err(NAError::new("Not a valid packet length")),
+                        Ok(len) => Ok(Filter::LT(len))
+                    }
+                },
+
+
                 _ => Err(NAError::new("Unavailable filter")),
             }
         }
