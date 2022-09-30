@@ -381,20 +381,19 @@ pub mod sniffer {
                 let source = option_to_string(self.source_address.clone());
                 let dest = option_to_string(self.destination_address.clone());
                 let space = match (source, dest) {
-                    ("None".to_string(), _) => "\t\t",
+                    (s, _) if s.eq("None") => "\t\t",
                     (s, d) if s.contains(":") && d.contains(":") => {
-                        let svec = s.split(":").collect();
-                        let dvec = d.split(":").collect();
-                        if svec.len() > 4 && dvec.len() > 4 {
-                            return "\n"
-                        }
-                        "\t"
+                        let svec = s.as_str().split(":").collect::<Vec<&str>>();
+                        let dvec = d.as_str().split(":").collect::<Vec<&str>>();
+                        let sp = if svec.len() > 4 && dvec.len() > 4 {"\n"} else {"\t"};
+                        sp
+
                     }
                     _ => "\t"
                 };
                 
                 s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone()) + space
-                    + &*" IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
+                    + &*"IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
                 s
             }
 
