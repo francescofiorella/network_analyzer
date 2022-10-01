@@ -325,10 +325,17 @@ fn notui_event_handler(sniffer: &mut Sniffer) {
         }
 
         match cmd.chars().nth(0).unwrap().to_ascii_lowercase() {
-            'p' => sniffer.pause(),
-            'r' => sniffer.resume(),
+            'p' => {
+                sniffer.pause();
+                println!("{}", PAUSE);
+            },
+            'r' => {
+                sniffer.resume();
+                println!("{}", RUN);
+            },
             'q' => {
                 sniffer.stop();
+                println!("{}", QUIT);
                 break;
             }
             _ => {
