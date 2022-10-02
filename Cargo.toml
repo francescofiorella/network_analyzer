@@ -7,7 +7,6 @@ edition = "2021"
 
 [dependencies]
 pcap = "0.10.1"
-# rustc-serialize = "0.3.24"
 clap = { version = "3.2.21", features = ["derive"] }
 mac_address = "1.1.3"
 
