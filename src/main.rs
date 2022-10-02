@@ -5,7 +5,7 @@ use std::thread;
 use std::thread::sleep;
 use std::time::Duration;
 use clap::Parser;
-use cursive::backends::curses::pan::pancurses::{A_BOLD, A_REVERSE, COLOR_BLACK, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_WHITE, COLOR_YELLOW, curs_set, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
+use cursive::backends::curses::pan::pancurses::{A_BOLD, A_REVERSE, COLOR_BLACK, COLOR_CYAN, COLOR_GREEN, COLOR_MAGENTA, COLOR_PAIR, COLOR_WHITE, COLOR_YELLOW, curs_set, endwin, init_pair, initscr, Input, newwin, noecho, resize_term, start_color, Window};
 use pcap::Device;
 use network_analyzer::sniffer::{get_adapter, Sniffer};
 use network_analyzer::sniffer::channel::Message;
@@ -463,6 +463,7 @@ fn main() {
                         if state.is_stopped() {
                             if tui_enabled {
                                 print_closing(sub4.as_ref().unwrap(), tui_mutex_cl.clone());
+                                sleep(Duration::from_secs(3)); //to show the logo
                             }
                             break;
                         }
@@ -476,10 +477,15 @@ fn main() {
             }
         });
 
-        // Event Handler
-        // Main thread in loop qui dentro
+        //Main thread
+
+        // Event handler: main thread in loop here
         enable_commands(&mut s, main_window, state_window, tui_enabled, tui_mutex);
 
         observer_thread.join().unwrap();
+
+        if tui_enabled {
+            endwin();
+        }
     }
 }

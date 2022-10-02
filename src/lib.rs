@@ -309,6 +309,7 @@ pub mod sniffer {
                                 (67,_) | (_,67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
                                 (68,_) | (_,68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
                                 (443,_) | (_,443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
+                                (1900,_) | (_, 1900) => transported_protocol = Some("UDP (SSDP)".to_string()),
                                 //others
                                 (5353,_) | (_,5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
                                 _ => () ,
@@ -332,6 +333,7 @@ pub mod sniffer {
                                 (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
                                 (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
                                 (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                (1900,_) | (_, 1900) => transported_protocol = Some("TCP (SSDP)".to_string()),
                                 //others
                                 (5353,_) | (_,5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
                                 _ => () ,
@@ -364,6 +366,7 @@ pub mod sniffer {
                                 (443,_) | (_,443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
                                 (546, 547) => transported_protocol = Some("UDP (DHCPv6 req.)".to_string()),
                                 (547, 546) => transported_protocol = Some("UDP (DHCPv6 resp.)".to_string()),
+                                (1900,_) | (_, 1900) => transported_protocol = Some("UDP (SSDP)".to_string()),
                                 //others
                                 (5353,_) | (_,5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
                                 _ => () ,
@@ -389,6 +392,7 @@ pub mod sniffer {
                                 (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
                                 (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
                                 (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                (1900,_) | (_, 1900) => transported_protocol = Some("TCP (SSDP)".to_string()),
                                 //others
                                 (5353,_) | (_,5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
                                 _ => () ,
