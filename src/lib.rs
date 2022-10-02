@@ -259,6 +259,20 @@ pub mod sniffer {
         use crate::sniffer::format::{option_to_string, to_u16};
         use crate::sniffer::na_packet::protocols::{get_ipv6_transported_protocol, to_ip_address, to_ipv6_address, to_level_three_protocol, to_mac_address, to_transported_protocol};
 
+        /// The struct `NAPacket` describes the packet sniffed, keeping the most relevant network information like:
+        /// * source and destination MAC addresses
+        /// * level 3 protocol type
+        /// * source and destination level 3 adresses (IPv4 or IPv6)
+        /// * packet length (in bytes)
+        /// * transported protocol
+        /// * source and destination ports (if any)
+        /// * timestamp
+        ///
+        /// Moreover, it is also responsible for:
+        /// 1) formatting the `NAPacket` information to be printed out better on the screen
+        /// 2) filtering the `NAPacket` using a filter tag defining transported protocol, IP addresses, ports or packet
+        /// 3) casting integers extracted from pcap `Packet` library into MAC addresses, IP addresses (v4 and v6) and level 3 and 4 transported protocols.
+
         #[derive(Debug, Clone)]
         pub struct NAPacket {
             //level 2 header
@@ -280,6 +294,9 @@ pub mod sniffer {
         }
 
         impl NAPacket {
+
+            /// Creates a new `NAPacket` object starting from a `Packet` of `pcap` library.
+
             pub fn new(pcap_packet: Packet) -> Self {
                 let mut source_address = None;
                 let mut destination_address = None;
@@ -368,6 +385,9 @@ pub mod sniffer {
                     timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis(),
                 }
             }
+            /// Formats the `NAPacket` source and destination MAC addresses.
+            ///
+            /// This function returns a [`String`] containing source and destination MAC addresses properly formatted to appear on the terminal.
 
             pub fn to_string_mac(&self) -> String {
                 let mut s = String::new();
@@ -376,6 +396,14 @@ pub mod sniffer {
                 s
             }
 
+            /// Formats the `NAPacket` source and destination level 3 addresses (IPv4 or IPv6).
+            ///
+            /// This function returns a [`String`] containing source and destination addresses properly formatted to appear on the terminal.
+            ///
+            /// Since IPv6 addresses can be longer then IPv4 ones, they cannot appear in the same line
+            /// otherwise can generate issues when displayed on the terminal.
+            ///
+            /// It evaluates the space to put between the addresses based on their length, and then inserts it in the middle of the two.
             pub fn to_string_endpoints(&self) -> String {
                 let mut s = String::new();
                 let source = option_to_string(self.source_address.clone());
@@ -397,12 +425,20 @@ pub mod sniffer {
                 s
             }
 
+            /// Formats the `NAPacket` source and destination ports.
+            ///
+            /// This function returns a [`String`] containing the source and destination ports properly formatted to appear on the terminal.
+
             pub fn to_string_ports(&self) -> String {
                 let mut s = String::new();
                 s.push_str(&*("Port_s: ".to_owned() + &option_to_string(self.source_port) + "\t\t  "
                     + &*"Port_d: ".to_owned() + &option_to_string(self.destination_port)));
                 s
             }
+
+            /// Formats the `NAPacket` transported protocols, length and timestamp.
+            ///
+            /// This function returns a [`String`] containing protocols transported, length and timestamp properly formatted to appear on the terminal.
 
             pub fn info(&self) -> String {
                 let mut s = String::new();
@@ -476,6 +512,11 @@ pub mod sniffer {
             use mac_address::MacAddress;
             use crate::sniffer::format::to_u16;
 
+    /// Casts a sequence of bytes into a MAC address.
+    ///
+    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the MAC address and
+    /// returns a [String] containing the MAC address properly formatted.
+
             pub(crate) fn to_mac_address(p: &[u8], start: usize) -> String {
                 MacAddress::new([
                     p[start],
@@ -487,6 +528,11 @@ pub mod sniffer {
                 ]).to_string()
             }
 
+    /// Casts a sequence of bytes into an IPv4 address.
+    ///
+    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv4 address and
+    /// returns a [String] containing the IPv4 address properly formatted.
+
             pub(crate) fn to_ip_address(p: &[u8], start: usize) -> String {
                 Ipv4Addr::new(
                     p[start],
@@ -496,6 +542,10 @@ pub mod sniffer {
                 ).to_string()
             }
 
+    /// Casts a sequence of bytes into an IPv4 address.
+    ///
+    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv4 address and
+    /// returns a [String] containing the IPv4 address properly formatted.
             pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String {
                 Ipv6Addr::new(
                     to_u16(p, start),
@@ -508,6 +558,14 @@ pub mod sniffer {
                     to_u16(p, start + 14),
                 ).to_string()
             }
+
+    /// Converts an integer value into the corresponding transported protocol.
+    ///
+    /// This function takes a [u8] representing the value written inside the protocol field of a pcap `Packet` and returns a [String]
+    /// containing the actual transported protocol's name.
+    ///
+    /// The range of admissible values ranges from 1 to 142 (extremes included) excluding 43, 44, 51, 60 and 135.
+    /// All the values outside this range will return a [String] containing "Unknown".
 
             pub(crate) fn to_transported_protocol(prot_num: u8) -> String {
                 match prot_num {
@@ -647,10 +705,21 @@ pub mod sniffer {
                     140 => "Shim6", // Site Multihoming by IPv6 Intermediation
                     141 => "WESP", // Wrapped Encapsulating Security Payload
                     142 => "ROHC", // Robust Header Compression
-
                     _ => "Unknown"
                 }.to_string()
             }
+
+    /// Converts an integer value into the corresponding level 3 protocol.
+    ///
+    /// This function takes a [u16] representing the hexadecimal value written inside the 2 bytes of the protocol field of a pcap `Packet` and returns a [String]
+    /// containing the actual level 3 protocol's name.
+    ///
+    /// The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
+    /// 0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
+    /// 0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
+    /// 0x8906, 0x8914, 0x8915, 0x891D, 0x893a, 0x892F, 0x9000, 0xF1C1.
+    ///
+    /// All the values outside this range will return a [String] containing "Unknown".
 
             pub(crate) fn to_level_three_protocol(prot_num: u16) -> String {
                 match prot_num {
