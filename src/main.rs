@@ -449,7 +449,7 @@ fn main() {
             if tui_enabled {
                 let s4 = newwin(31, 76, 10, 2);
                 s4.scrollok(true);
-                s4.setscrreg(0, 30);
+                s4.setscrreg(0, 36);
                 sub4 = Some(s4);
             }
 

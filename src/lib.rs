@@ -303,10 +303,14 @@ pub mod sniffer {
                         //UDP
                         if prot_num == 17 {
                             match (source_port.unwrap(),destination_port.unwrap()) {
+                                //well known ports (0-1023)
                                 (53,_) => transported_protocol = Some("UDP (DNS Response)".to_string()),
                                 (_,53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
                                 (67,_) | (_,67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
                                 (68,_) | (_,68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
+                                (443,_) | (_,443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
+                                //others
+                                (5353,_) | (_,5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
                                 _ => () ,
                             }
                         }
@@ -314,6 +318,7 @@ pub mod sniffer {
                         //TCP
                         if prot_num == 6 {
                             match (source_port.unwrap(),destination_port.unwrap()) {
+                                //well known ports (0-1023)
                                 (20,_) | (_,20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
                                 (21,_) | (_,21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
                                 (22,_) | (_,22) => transported_protocol = Some("TCP (SSH)".to_string()),
@@ -327,6 +332,8 @@ pub mod sniffer {
                                 (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
                                 (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
                                 (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                //others
+                                (5353,_) | (_,5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
                                 _ => () ,
                             }
                         }
@@ -344,7 +351,52 @@ pub mod sniffer {
                             source_port = Some(to_u16(&pcap_packet, port_index));
                             destination_port = Some(to_u16(&pcap_packet, port_index + 2));
                         }
+
+
+                        //UDP
+                        if prot == "UDP" {
+                            match (source_port.unwrap(),destination_port.unwrap()) {
+                                //well known ports (0-1023)
+                                (53,_) => transported_protocol = Some("UDP (DNS Response)".to_string()),
+                                (_,53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
+                                (67,_) | (_,67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
+                                (68,_) | (_,68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
+                                (443,_) | (_,443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
+                                (546, 547) => transported_protocol = Some("UDP (DHCPv6 req.)".to_string()),
+                                (547, 546) => transported_protocol = Some("UDP (DHCPv6 resp.)".to_string()),
+                                //others
+                                (5353,_) | (_,5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
+                                _ => () ,
+                            }
+                        }
+
+                        //TCP
+                        if prot == "TCP" {
+                            match (source_port.unwrap(),destination_port.unwrap()) {
+                                //well known ports (0-1023)
+                                (20,_) | (_,20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
+                                (21,_) | (_,21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
+                                (22,_) | (_,22) => transported_protocol = Some("TCP (SSH)".to_string()),
+                                (23,_) | (_,23) => transported_protocol = Some("TCP (Telnet)".to_string()),
+                                (25,_) | (_,25) => transported_protocol = Some("TCP (SMTP)".to_string()),
+                                (80,_) | (_,80) => transported_protocol = Some("TCP (HTTP)".to_string()),
+                                (110,_) | (_,110) => transported_protocol = Some("TCP (POP)".to_string()),
+                                (143,_) | (_,143) => transported_protocol = Some("TCP (IMAP4)".to_string()),
+                                (443,_) | (_,443) => transported_protocol = Some("TCP (HTTPS)".to_string()),
+                                (465,_) | (_,465) => transported_protocol = Some("TCP (SMTPS)".to_string()),
+                                (546, 547) => transported_protocol = Some("TCP (DHCPv6 req.)".to_string()),
+                                (547, 546) => transported_protocol = Some("TCP (DHCPv6 resp.)".to_string()),
+                                (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
+                                (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
+                                (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                //others
+                                (5353,_) | (_,5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
+                                _ => () ,
+                            }
+                        }
                     }
+
+
                     // ARP | RARP
                     0x0806 | 0x8035 => {
                         // Sender IP
