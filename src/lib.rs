@@ -880,11 +880,20 @@ pub mod sniffer {
         use std::fmt::{Display, Formatter};
 
         #[derive(Debug, Clone)]
+
+        /// This struct `NAError` is used to define custom error messages.
+        ///
+        /// It contains a message of type [String] that includes a brief description of the error occurred, depending on the function
+        /// that calls it.
+        ///
+        /// It implements Display and Error traits.
         pub struct NAError {
             message: String,
         }
 
+
         impl NAError {
+            /// Creates a new `NAError` object starting from a [&str] msg received as parameter.
             pub(crate) fn new(msg: &str) -> Self { NAError { message: msg.to_string() } }
         }
 

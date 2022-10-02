@@ -68,6 +68,13 @@ fn notui_show_commands() {
     println!("{}", RUN);
 }
 
+/// Initializes the GUI by defining the main window with its dimensions, the boxes inside it
+/// with their positions and format the parameters received by putting them inside the top right box.
+///
+/// Moreover, if running on MacOS or Linux, it calls the resize command of the terminal to define its dimensions.
+///
+/// This function receives as parameters the adapter, filter, output path and update time defined from the command line and
+/// returns a [Window] including them inside the top right box.
 fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
     //screen initialization
     if cfg!(target_os = "macos") {
@@ -124,6 +131,9 @@ fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> W
     window
 }
 
+/// Initializes the box containing the execution state of the program, by defining its dimensions and positions.
+///
+/// It returns a [Window] with a new box inside that as default contains "*** SNIFFING PACKETS ***".
 fn state_win_init() -> Window {
     let state_window = newwin(3, 78, 6, 1);
     state_window.draw_box(0, 0);
@@ -189,7 +199,20 @@ fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mu
         None => println!("{}", msg),
     }
 }
-
+/// Prints an [NAError] in different ways depending if the TUI is enabled or not.
+///
+/// This function receives as parameters:
+/// 1) `Option<&Window>` that contains the main Window or None if the TUI is not enabled
+/// 2) `NAError` object containing the actual error to print
+/// 3)  [bool] `tui_enabled` that specifies if the TUI is enabled or not
+/// 4) `Arc<Mutex<()>>` to print on the main window using the `printw` function.
+///
+/// If the TUI is enabled, the function will:
+/// 1) Lock the mutex
+/// 2) Print the error inside the state box of the main window
+/// 3) Release the lock
+///
+/// Otherwise, if TUI is not enabled, it prints the error using the `println!` macro.
 fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mutex: Arc<Mutex<()>>) {
     if tui_enabled {
         let _mg = tui_mutex.lock().unwrap(); //drop at the end of the block
@@ -310,6 +333,12 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     }
 }
 
+/// Manages the user interaction when using TUI.
+///
+/// This function performs the following operations:
+///1) Waits in loop (through a blocking read_line) for user user commands (keyboard p,q,r pressure / enter)
+///2) Calls the function associated to the selected command and prints the new execution state.
+/// If the key pressed is not defined, "Undefined command" will be printed.
 fn notui_event_handler(sniffer: &mut Sniffer) {
     //event loop
     loop {
