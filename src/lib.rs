@@ -894,7 +894,7 @@ pub mod sniffer {
 
         impl NAError {
             /// Creates a new `NAError` object starting from a [&str] msg received as parameter.
-            pub(crate) fn new(msg: &str) -> Self { NAError { message: msg.to_string() } }
+            pub fn new(msg: &str) -> Self { NAError { message: msg.to_string() } }
         }
 
         impl Display for NAError {
