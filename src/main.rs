@@ -29,7 +29,7 @@ struct Args {
     adapter: u8,
     #[clap(short, long, value_parser, default_value = "report")]
     output: String,
-    #[clap(short, long, value_parser, default_value = "10")]
+    #[clap(short, long, value_parser, default_value = "10000")]
     update_time: u64,
     #[clap(short, long, value_parser, default_value = "None")]
     filter: String,
