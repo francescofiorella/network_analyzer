@@ -82,7 +82,7 @@ pub mod sniffer {
             // report update thread (timer)
             let timer_thread = spawn(move || {
                 loop {
-                    sleep(Duration::from_millis(update_time));
+                    sleep(Duration::from_secs(update_time));
                     let mg_res = m_cl_2.lock();
                     match mg_res {
                         Ok(mut mg) if mg.0.is_resumed() => {
@@ -97,7 +97,7 @@ pub mod sniffer {
                         _ => break
                     }
                 }
-                //println!("Timer thread exiting")
+                println!("Timer thread exiting")
             });
 
             let sniffing_thread = spawn(move || {
