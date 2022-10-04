@@ -1,5 +1,402 @@
 # DOCs
 
+## Network Analyzer Library
+
+`network_analyzer` is a multi-platform library that provides structs and functions to manage a sniffing process,
+capable of intercepting incoming and outgoing traffic through the network interfaces of a computer.<br>
+The sniffed network adapter is set in promiscuous mode: packets are collected, along with their IP addresses,
+ports and protocol type.
+
+Periodically, a textual report (in `.xm` and `.md` formats) is generated, describing a synthesis of the
+observed events.<br>
+The traffic is divided in flows and the library shows for each of the network address/port pairs,
+the protocol that was transported, the cumulated number of bytes transmitted, the timestamp of the
+first and last occurrence of information exchange.
+
+A `Sniffer` struct is exposed: it is the main object that can be initialized and that offers some methods
+to control the sniffing process (`pause`, `resume`, `stop`) and others to connect directly an application
+in order to receive notifications (`subscribe`).
+
+When the sniffer is running, packets are collected and shown as `NAPacket` instances, that contain
+the MAC and IP addresses, the level three and the transported protocols, the timestamp and the ports.
+
+Moreover, the sniffer state (`NAState`), the usable filters (`Filter`) and the possible errors (`NAError`)
+are exposed, along with a `Message` struct, sent into a channel used to communicate with the application.
+
+Finally, a sample application is provided that shows how to properly use the library.
+
+### network_analyzer::sniffer
+
+```rust
+pub fn get_adapter(adapter: u8) -> Result<Device, NAError>
+```
+
+Returns the nth `Device` of the device list, or an error if it doesn't exist.
+
+This function takes an u8 representing the index associated to a device within the network device list and returns a Result, containing either a proper pcap `Device` object, or a `NAError`
+
+### network_analyzer::sniffer::Sniffer
+
+The struct `Sniffer` initializes the sniffing and reporting process, by
+* Finding the `pcap::Device` associated to the given `adapter`
+* Properly setting up (in promisc mode) and activating a `pcap::Capture` on the given `adapter`.
+* Associating (if possible) the given `filter` string to a `network_analyzer::Filter` tag
+* Creating a `network_analyzer::channel::SnifferChannel` to transfer informations from the
+  internal threads to the subscribed one (where the Sniffer is created).
+  Moreover, the struct `Sniffer` is responsible for the initialization of two threads:
+1) <i>timer_thread</i>: while the sniffer isn't paused/stopped, every `update_time` milliseconds, updates the sniffing report contained in a `output` (.xml and .md) file
+2) <i>sniffing_thread</i>: while the sniffer isn't paused/stopped, waits for the capturing of a packet, takes the captured `pcap::Packet`, transforms it in a readable `NAPacket`, filters it (following the given `filter`) and eventually transfers it to the subscribed thread(s) via `SnifferChannel`.
+   The `Sniffer` also implements the `Drop` trait, so that the `drop(&mut self)` function waits for the proper termination
+   of the two threads initialized by the struct.
+
+```rust
+pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError>
+```
+Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String), output file update time (u64), filter (String)) or returns an `NAError`.
+
+```rust
+pub fn pause(&mut self)
+```
+Pauses both sniffing and reporting threads within the `Sniffer` struct
+This function performs different tasks in order to correctly pause the sniffing process:
+* Sets the sniffer's `NAState` field to `NAState::PAUSED`
+* Sends a 'state change message' onto the `SnifferChannel`
+* Forces the writing of a report before the pause
+
+ ```rust
+pub fn resume(&mut self)
+```
+Resumes both sniffing and reporting threads within the `Sniffer` struct
+This function performs different tasks in order to correctly resume the sniffing process:
+* Sets the sniffer's `NAState` field to `NAState::RESUMED`
+* Sends a 'state change message' onto the `SnifferChannel`
+* Notifies both sniffing and reporting threads in wait on the `Sniffer`'s condition variable
+
+```rust
+pub fn stop(&mut self)
+```
+Forces the exiting of both sniffing and reporting threads within the `Sniffer` struct
+This function performs different tasks in order to terminate of the sniffing process:
+* Sets the sniffer's `NAState` field to `NAState::STOPPED`
+* Sends a 'state change message' onto the `SnifferChannel`
+* Notifies both sniffing and reporting threads (if paused, otherwise the notification is lost)
+
+```rust
+pub fn subscribe(&mut self) -> Receiver<Message>
+```
+
+Returns a `Receiver<Message>`.<br>
+It can be used to receive all the updates from the `Sniffer`.
+
+This method tries to acquire the inner Mutex, so it blocks until it is free.
+Then it calls the `subscribe()` function of the `SnifferChannel` and returns
+the new receiver.
+
+```rust
+pub fn get_state(&self) -> NAState
+```
+Returns the current state of the sniffer.
+
+This method tries to acquire the inner Mutex, so it blocks until it is free.
+Then the NAState is cloned and returned.
+
+### network_analyzer::sniffer::NAPacket
+
+The struct `NAPacket` describes the packet sniffed and keeps the most relevant network information like:
+* source and destination MAC addresses
+* level 3 protocol type
+* source and destination level 3 adresses (IPv4 or IPv6)
+* packet length (in bytes)
+* transported protocol
+* source and destination ports (if any)
+* timestamp.
+
+Moreover, it is also responsible for:
+1) formatting the `NAPacket` information to be printed out better on the screen
+2) filtering the `NAPacket` using a filter tag defining transported protocol, IP addresses, ports or packet
+3) casting integers extracted from pcap `Packet` library into MAC addresses, IP addresses (v4 and v6) and level 3 and 4 transported protocols.
+
+```rust
+pub fn new(pcap_packet: Packet) -> Self
+```
+Creates a new `NAPacket` object starting from a `Packet` of `pcap` library.
+
+This function accesses specific bytes of the `pcap::Packet` object containing relevant information
+such as transported protocols, source and destination ports, addresses and so on which are casted using appropriate functions.
+
+```rust
+pub fn to_string_mac(&self) -> String
+```
+Formats the `NAPacket` source and destination MAC addresses.
+
+This function returns a `String` containing source and destination MAC addresses properly formatted to appear on the terminal.
+
+```rust
+pub fn to_string_endpoints(&self) -> String
+```
+Formats the `NAPacket` source and destination level 3 addresses (IPv4 or IPv6).
+
+This function returns a `String` containing source and destination addresses properly formatted to appear on the terminal.
+
+Since IPv6 addresses can be longer then IPv4 ones, they cannot appear in the same line
+otherwise can generate issues when displayed on the terminal.
+It evaluates the space to put between the addresses based on their length, and then inserts it in the middle of the two.
+
+
+```rust
+pub fn to_string_ports(&self) -> String
+```
+Formats the `NAPacket` source and destination ports.
+
+This function returns a [`String`] containing the source and destination ports properly formatted to appear on the terminal.
+
+```rust
+pub fn info(&self) -> String
+```
+Formats the `NAPacket` transported protocols, length and timestamp.
+
+This function returns a `String` containing the
+* protocols transported
+* length
+* timestamp
+
+properly formatted to appear on the terminal.
+
+
+```rust
+pub fn filter(&self, filter: Filter) -> bool
+```
+
+* Returns `true` if the given `NAPacket` passes the given filter
+* Returns `false` if the given `NAPacket` doesn't pass the given filter
+  This function receives a `Filter` tag and checks if the receiver (`NAPacket`)
+  passes or not the filter.
+  <br></br>
+  <i>Example:</i>
+- The filter is `Filter::IP(192.168.1.1)` => if a 192.168.1.1 ip address is found
+  to be either the level 3 source or destination of the packet, `true` is returned.
+- The filter is `Filter::ARP` => if the level three type of the packet is found to be
+  "ARP", `true` is returned.
+- The filter is `Filter::None` => `true` is returned whatever packet is inspected
+
+### network_analyzer::sniffer::na_packet::protocols
+
+```rust
+pub(crate) fn to_mac_address(p: &[u8], start: usize) -> String
+```
+Casts a sequence of bytes into a MAC address.
+
+This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the MAC address and
+returns a `String` containing the MAC address properly formatted.
+
+
+```rust
+pub(crate) fn to_ip_address(p: &[u8], start: usize) -> String
+```
+
+Casts a sequence of bytes into an IPv4 address.
+
+This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the IPv4 address and
+returns a `String` containing the IPv4 address properly formatted.
+
+```rust
+pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String
+```
+Casts a sequence of bytes into an IPv6 address.
+
+This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the IPv6 address and
+returns a `String` containing the IPv6 address properly formatted.
+
+```rust
+pub(crate) fn to_transported_protocol(prot_num: u8) -> String
+```
+Converts an integer value into the corresponding transported protocol.
+
+This function takes a `u8` representing the value written inside the protocol field of a pcap `Packet` and returns a `String`
+containing the actual transported protocol's name.
+
+The range of admissible values ranges from 1 to 142 (extremes included) excluding 43, 44, 51, 60 and 135.
+All the values outside this range will return a `String` containing "Unknown".
+
+```rust
+pub(crate) fn to_level_three_protocol(prot_num: u16) -> String
+```
+Converts an integer value into the corresponding level 3 protocol.
+
+This function takes a `u16` representing the hexadecimal value written inside the 2 bytes of the protocol field of a pcap `Packet` and returns a `String`
+containing the actual level 3 protocol's name.
+
+The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
+0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
+0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
+0x8906, 0x8914, 0x8915, 0x891D, 0x893A, 0x892F, 0x9000, 0xF1C1.
+
+All the values outside this range will return a `String` containing "Unknown".
+
+
+```rust
+pub(crate) fn get_ipv6_transported_protocol(p: &[u8], (next_header_index, remaining_size): (usize, usize)) -> (String, usize)
+```
+
+Slides the IPv6 headers until it finds another protocol, so it returns a pair
+composed by the transported protocol's name and the index of the first byte
+of its header.
+
+This function gets two arguments:
+* The packet to be processed as an array of u8.
+* A pair composed by the "next header index" which refers to the first byte
+  of the next header to be processed and by the "remaining size" which is the
+  remaining dimension (in bytes) of the header.
+
+The function slides the IPv6 header until it finds the "Next Header" field,
+if it indicates an IPv6 Extension Header, it calculates the remaining length
+of the first header and then calls again the function (in a recursive call),
+otherwise it calls `to_transported_protocol(prot_num)` and returns.
+
+It panics if the index exceed the array length.
+
+### network_analyzer::sniffer::NAError
+
+The struct `NAError` defines custom error messages.
+
+It contains a message of type `String` that includes a brief description of the error occurred, depending on the function
+that calls it.
+It implements Display and Error traits.
+
+```rust
+pub(crate) fn new(msg: &str) -> Self
+```
+Creates a new `NAError` object starting from a &str msg received as parameter.
+
+
+### network_analyzer::sniffer::Filter
+
+Enumerates the different filtering categories offered by the network_analyzer library.
+The filter to be used is defined as CLI argument, by passing an appropriate filter string preceeded by flag -f (--filter as long notation) [see Application > CLI Arguments section]
+
+It also implements the `ToString` trait, allowing a correct transformation of `Filter`'s
+tag (and possible detail) into a proper string representation.
+<br></br>
+<i> Example </i>
+* `Filter::IP(192.168.1.1)` is converted into "IP 192.168.1.1"
+* `Filter::Port(443)` is converted into "port 443"
+
+```rust
+pub fn get_filter(filter: &String) -> Result<Filter, NAError>
+```
+
+Associates a received string to a `Filter` (if possible), or returns an `NAError`.
+This function associates a string to a filter, by analyzing the correctness of the passed parameter.
+<br></br>
+<i>Example</i>:
+* "ipv4" can be associated to a `Filter::IPv4` filter
+* "192.168.1.1" can be associated to  `Filter::IP(String)`
+* "2001:db8::2:1" can be associated to a `Filter::IP(String)`
+* "foo.192 foo" cannot be associated to any filter
+
+### network_analyzer::sniffer::stats::Stats
+
+The `Stats` type.
+
+It is used to store information about the (ISO/OSI) level four packet flow,
+needed to produce the sniffer report.<br>
+This type implements the `Debug` and `Clone` traits.
+
+It contains:
+* The pair of socket
+* The level three protocol's name
+* The transported protocol's name
+* The flow's total number of bytes
+* The timestamp of the first packet received
+* The timestamp of the last packet received
+
+```rust
+pub(crate) fn new(packet: NAPacket) -> Self
+```
+
+Creates a new `Stats` from a `NAPacket`.
+
+This method extracts the needed field from the packet and populate
+the new object, by using the timestamp twice, both for the first
+and last packet fields.
+
+It is typically used by passing as argument the first packet of a flow.
+
+```rust
+pub(crate) fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats>
+```
+
+Produces two report files (<i>.xml</i> and <i>.md</i>) and returns the updated
+vector of `Stats`.
+
+The function takes as argument two file name (one for each format), a vector of
+packets and a vector of (old) stats; these are used to produce an updated version
+of the stats by calling the function `produce_stats(stats, packets)`.<br>
+Then, it creates the files and writes them by using the `writeln!` macro.<br>
+At the end, it returns the updated stats.
+
+It panics if it is unable to write correctly the files and show the message
+`"Unable to write the report file!"`.
+
+```rust
+fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats>
+```
+
+Produces an updated version of the stats and returns a vector of `Stats` objects.
+
+This function takes as argument a vector of old stats and a vector of packets
+to be processed and added.
+
+It slides the packets, checks if its pair of socket is already recorded
+in the stats, then it updates the relative `Stats` object by adding the
+number of bytes and replacing the last packet timestamp.<br>
+Otherwise, it creates a new object by calling the `new(packet)` static
+function of `Stats`.
+
+At the end, it returns the updated vector of stats.
+
+### network_analyzer::sniffer::channel::SnifferChannel
+
+The `SnifferChannel` type.
+
+It is used to let the sniffer communicate with its subscribers by sending messages.<br>
+It contains a vector of `Sender<Message>`, one for each subscriber.
+
+```rust
+pub(crate) fn new() -> Self
+```
+
+Creates a new `SnifferChannel` object and populate it with an empty array of senders.
+
+```rust
+pub(crate) fn subscribe(&mut self) -> Receiver<Message>
+```
+
+Creates a new communication channel and returns the receiver.
+
+This method use the `std::sync::mpsc::channel()` function to create
+a `Sender`, which will be added to the `SnifferChannel` and a `Receiver`,
+which will be returned to the subscriber.
+
+```rust
+pub(crate) fn send(&mut self, message: Message)
+```
+
+Sends a `Message` to all the subscribers.
+
+The method slides the senders vector and checks if each of them is still valid.<br>
+It calls the `send(message)` method of the `Sender` that attempts to send the
+message and returns an error if the `Receiver` has been already deallocated.<br>
+In this case, the sender is removed from the vector.
+
+### network_analyzer::sniffer::channel::Message
+
+The `Message` type.
+
+It is an enumeration that contains the message sent in the `SnifferChannel`,
+that can be either a `NAError`, a `NAState` or a `NAPacket`.<br>
+This type implements the `Clone` trait.
+
 ## Application
 
 ### Pictures of FCC Network Analyzer v1.0, in tui mode
@@ -164,400 +561,3 @@ These methods will print the message on the stdout or on the tui (if enabled).
  
 Then, a new loop is initialized in the main thread, that listens for inputs and, in the end,
 it waits for the termination of all the secondary threads, before closing.
-
-## Network Analyzer Library
-
-`network_analyzer` is a multi-platform library that provides structs and functions to manage a sniffing process,
-capable of intercepting incoming and outgoing traffic through the network interfaces of a computer.<br>
-The sniffed network adapter is set in promiscuous mode: packets are collected, along with their IP addresses,
-ports and protocol type.
-
-Periodically, a textual report (in `.xm` and `.md` formats) is generated, describing a synthesis of the
-observed events.<br>
-The traffic is divided in flows and the library shows for each of the network address/port pairs,
-the protocol that was transported, the cumulated number of bytes transmitted, the timestamp of the
-first and last occurrence of information exchange.
-
-A `Sniffer` struct is exposed: it is the main object that can be initialized and that offers some methods
-to control the sniffing process (`pause`, `resume`, `stop`) and others to connect directly an application
-in order to receive notifications (`subscribe`).
-
-When the sniffer is running, packets are collected and shown as `NAPacket` instances, that contain
-the MAC and IP addresses, the level three and the transported protocols, the timestamp and the ports.
-
-Moreover, the sniffer state (`NAState`), the usable filters (`Filter`) and the possible errors (`NAError`)
-are exposed, along with a `Message` struct, sent into a channel used to communicate with the application.
-
-Finally, a sample application is provided that shows how to properly use the library.
-
-### network_analyzer::sniffer
-
-```rust
-pub fn get_adapter(adapter: u8) -> Result<Device, NAError>
-```
-
-Returns the nth `Device` of the device list, or an error if it doesn't exist.
-
-This function takes an u8 representing the index associated to a device within the network device list and returns a Result, containing either a proper pcap `Device` object, or a `NAError`
-
-### network_analyzer::sniffer::Sniffer
-
-The struct `Sniffer` initializes the sniffing and reporting process, by
-* Finding the `pcap::Device` associated to the given `adapter`
-* Properly setting up (in promisc mode) and activating a `pcap::Capture` on the given `adapter`.
-* Associating (if possible) the given `filter` string to a `network_analyzer::Filter` tag
-* Creating a `network_analyzer::channel::SnifferChannel` to transfer informations from the
-internal threads to the subscribed one (where the Sniffer is created).
-Moreover, the struct `Sniffer` is responsible for the initialization of two threads:
- 1) <i>timer_thread</i>: while the sniffer isn't paused/stopped, every `update_time` milliseconds, updates the sniffing report contained in a `output` (.xml and .md) file
- 2) <i>sniffing_thread</i>: while the sniffer isn't paused/stopped, waits for the capturing of a packet, takes the captured `pcap::Packet`, transforms it in a readable `NAPacket`, filters it (following the given `filter`) and eventually transfers it to the subscribed thread(s) via `SnifferChannel`.
- The `Sniffer` also implements the `Drop` trait, so that the `drop(&mut self)` function waits for the proper termination
- of the two threads initialized by the struct.
- 
-```rust
-pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError>
-```
-Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String), output file update time (u64), filter (String)) or returns an `NAError`.
-
-```rust
-pub fn pause(&mut self)
-```
-Pauses both sniffing and reporting threads within the `Sniffer` struct
-This function performs different tasks in order to correctly pause the sniffing process:
- * Sets the sniffer's `NAState` field to `NAState::PAUSED`
- * Sends a 'state change message' onto the `SnifferChannel`
- * Forces the writing of a report before the pause
- 
- ```rust
-pub fn resume(&mut self)
-```
- Resumes both sniffing and reporting threads within the `Sniffer` struct
- This function performs different tasks in order to correctly resume the sniffing process:
- * Sets the sniffer's `NAState` field to `NAState::RESUMED`
- * Sends a 'state change message' onto the `SnifferChannel`
- * Notifies both sniffing and reporting threads in wait on the `Sniffer`'s condition variable
- 
-```rust
-pub fn stop(&mut self)
-```
-Forces the exiting of both sniffing and reporting threads within the `Sniffer` struct
- This function performs different tasks in order to terminate of the sniffing process:
- * Sets the sniffer's `NAState` field to `NAState::STOPPED`
- * Sends a 'state change message' onto the `SnifferChannel`
- * Notifies both sniffing and reporting threads (if paused, otherwise the notification is lost)
-
-```rust
-pub fn subscribe(&mut self) -> Receiver<Message>
-```
-
-Returns a `Receiver<Message>`.<br>
-It can be used to receive all the updates from the `Sniffer`.
-
-This method tries to acquire the inner Mutex, so it blocks until it is free.
-Then it calls the `subscribe()` function of the `SnifferChannel` and returns
-the new receiver.
-
-```rust
-pub fn get_state(&self) -> NAState
-```
-Returns the current state of the sniffer.
-
-This method tries to acquire the inner Mutex, so it blocks until it is free.
-Then the NAState is cloned and returned.
-
- ### network_analyzer::sniffer::NAPacket
-
-The struct `NAPacket` describes the packet sniffed and keeps the most relevant network information like:
-* source and destination MAC addresses
-* level 3 protocol type
-* source and destination level 3 adresses (IPv4 or IPv6)
-* packet length (in bytes)
-* transported protocol
-* source and destination ports (if any)
-* timestamp.
-  
-Moreover, it is also responsible for:
-1) formatting the `NAPacket` information to be printed out better on the screen
-2) filtering the `NAPacket` using a filter tag defining transported protocol, IP addresses, ports or packet
-3) casting integers extracted from pcap `Packet` library into MAC addresses, IP addresses (v4 and v6) and level 3 and 4 transported protocols. 
-
-```rust
-pub fn new(pcap_packet: Packet) -> Self
-```
-Creates a new `NAPacket` object starting from a `Packet` of `pcap` library.
-
-This function accesses specific bytes of the `pcap::Packet` object containing relevant information
-such as transported protocols, source and destination ports, addresses and so on which are casted using appropriate functions.
-
-```rust
-pub fn to_string_mac(&self) -> String
-```
-Formats the `NAPacket` source and destination MAC addresses.
-
-This function returns a `String` containing source and destination MAC addresses properly formatted to appear on the terminal.
-
-```rust
-pub fn to_string_endpoints(&self) -> String
-```
-Formats the `NAPacket` source and destination level 3 addresses (IPv4 or IPv6).
-
-This function returns a `String` containing source and destination addresses properly formatted to appear on the terminal.
-
-Since IPv6 addresses can be longer then IPv4 ones, they cannot appear in the same line
-otherwise can generate issues when displayed on the terminal.
-It evaluates the space to put between the addresses based on their length, and then inserts it in the middle of the two.
-
-
-```rust
-pub fn to_string_ports(&self) -> String
-```
-Formats the `NAPacket` source and destination ports.
-
-This function returns a [`String`] containing the source and destination ports properly formatted to appear on the terminal.
-
-```rust
-pub fn info(&self) -> String
-```
-Formats the `NAPacket` transported protocols, length and timestamp.
-
-This function returns a `String` containing the 
-* protocols transported
-* length 
-* timestamp 
-
-properly formatted to appear on the terminal.
-
-
-```rust
-pub fn filter(&self, filter: Filter) -> bool
-```
-
-* Returns `true` if the given `NAPacket` passes the given filter
-* Returns `false` if the given `NAPacket` doesn't pass the given filter
- This function receives a `Filter` tag and checks if the receiver (`NAPacket`)
- passes or not the filter.
-<br></br>
-<i>Example:</i>
-- The filter is `Filter::IP(192.168.1.1)` => if a 192.168.1.1 ip address is found
- to be either the level 3 source or destination of the packet, `true` is returned.
-- The filter is `Filter::ARP` => if the level three type of the packet is found to be
-"ARP", `true` is returned.
-- The filter is `Filter::None` => `true` is returned whatever packet is inspected
-
-### network_analyzer::sniffer::na_packet::protocols
-
-```rust
-pub(crate) fn to_mac_address(p: &[u8], start: usize) -> String
-```
-Casts a sequence of bytes into a MAC address.
-
-This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the MAC address and
-returns a `String` containing the MAC address properly formatted.
-
-
-```rust
-pub(crate) fn to_ip_address(p: &[u8], start: usize) -> String
-```
-
-Casts a sequence of bytes into an IPv4 address.
-
-This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the IPv4 address and
-returns a `String` containing the IPv4 address properly formatted.
-
-```rust
-pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String
-```
-Casts a sequence of bytes into an IPv6 address.
-
-This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the IPv6 address and
-returns a `String` containing the IPv6 address properly formatted.
-
-```rust
-pub(crate) fn to_transported_protocol(prot_num: u8) -> String
-```
-Converts an integer value into the corresponding transported protocol.
-
-This function takes a `u8` representing the value written inside the protocol field of a pcap `Packet` and returns a `String`
-containing the actual transported protocol's name.
-
-The range of admissible values ranges from 1 to 142 (extremes included) excluding 43, 44, 51, 60 and 135.
-All the values outside this range will return a `String` containing "Unknown".
-
-```rust
-pub(crate) fn to_level_three_protocol(prot_num: u16) -> String
-```
-Converts an integer value into the corresponding level 3 protocol.
-
-This function takes a `u16` representing the hexadecimal value written inside the 2 bytes of the protocol field of a pcap `Packet` and returns a `String`
-containing the actual level 3 protocol's name.
-
-The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
-0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
-0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
-0x8906, 0x8914, 0x8915, 0x891D, 0x893A, 0x892F, 0x9000, 0xF1C1.
-
-All the values outside this range will return a `String` containing "Unknown".
-
-
-```rust
-pub(crate) fn get_ipv6_transported_protocol(p: &[u8], (next_header_index, remaining_size): (usize, usize)) -> (String, usize)
-```
-
-Slides the IPv6 headers until it finds another protocol, so it returns a pair
-composed by the transported protocol's name and the index of the first byte
-of its header.
-
-This function gets two arguments:
-* The packet to be processed as an array of u8.
-* A pair composed by the "next header index" which refers to the first byte
-of the next header to be processed and by the "remaining size" which is the
-remaining dimension (in bytes) of the header.
-
-The function slides the IPv6 header until it finds the "Next Header" field,
-if it indicates an IPv6 Extension Header, it calculates the remaining length
-of the first header and then calls again the function (in a recursive call),
-otherwise it calls `to_transported_protocol(prot_num)` and returns.
-
-It panics if the index exceed the array length.
-
-### network_analyzer::sniffer::NAError
-
-The struct `NAError` defines custom error messages.
-
-It contains a message of type `String` that includes a brief description of the error occurred, depending on the function
-that calls it.
-It implements Display and Error traits.
-
-```rust
-pub(crate) fn new(msg: &str) -> Self
-```
-Creates a new `NAError` object starting from a &str msg received as parameter.
-
-
-### network_analyzer::sniffer::Filter
-
-Enumerates the different filtering categories offered by the network_analyzer library.
-The filter to be used is defined as CLI argument, by passing an appropriate filter string preceeded by flag -f (--filter as long notation) [see Application > CLI Arguments section]
-
-It also implements the `ToString` trait, allowing a correct transformation of `Filter`'s
-tag (and possible detail) into a proper string representation.
-<br></br>
-<i> Example </i>
-* `Filter::IP(192.168.1.1)` is converted into "IP 192.168.1.1"
-* `Filter::Port(443)` is converted into "port 443"
-
-```rust
-pub fn get_filter(filter: &String) -> Result<Filter, NAError>
-```
-
-Associates a received string to a `Filter` (if possible), or returns an `NAError`.
-This function associates a string to a filter, by analyzing the correctness of the passed parameter.
- <br></br>
-<i>Example</i>:
-* "ipv4" can be associated to a `Filter::IPv4` filter
-* "192.168.1.1" can be associated to  `Filter::IP(String)`
-* "2001:db8::2:1" can be associated to a `Filter::IP(String)`
-* "foo.192 foo" cannot be associated to any filter
-
-### network_analyzer::sniffer::stats::Stats
-
-The `Stats` type.
-
-It is used to store information about the (ISO/OSI) level four packet flow,
-needed to produce the sniffer report.<br>
-This type implements the `Debug` and `Clone` traits.
-
-It contains:
-* The pair of socket
-* The level three protocol's name
-* The transported protocol's name
-* The flow's total number of bytes
-* The timestamp of the first packet received
-* The timestamp of the last packet received
-
-```rust
-pub(crate) fn new(packet: NAPacket) -> Self
-```
-
-Creates a new `Stats` from a `NAPacket`.
-
-This method extracts the needed field from the packet and populate
-the new object, by using the timestamp twice, both for the first
-and last packet fields.
-
-It is typically used by passing as argument the first packet of a flow.
-
-```rust
-pub(crate) fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats>
-```
-
-Produces two report files (<i>.xml</i> and <i>.md</i>) and returns the updated
-vector of `Stats`.
-
-The function takes as argument two file name (one for each format), a vector of
-packets and a vector of (old) stats; these are used to produce an updated version
-of the stats by calling the function `produce_stats(stats, packets)`.<br>
-Then, it creates the files and writes them by using the `writeln!` macro.<br>
-At the end, it returns the updated stats.
-
-It panics if it is unable to write correctly the files and show the message
-`"Unable to write the report file!"`.
-
-```rust
-fn produce_stats(mut stats: Vec<Stats>, packets: Vec<NAPacket>) -> Vec<Stats>
-```
-
-Produces an updated version of the stats and returns a vector of `Stats` objects.
-
-This function takes as argument a vector of old stats and a vector of packets
-to be processed and added.
-
-It slides the packets, checks if its pair of socket is already recorded
-in the stats, then it updates the relative `Stats` object by adding the
-number of bytes and replacing the last packet timestamp.<br>
-Otherwise, it creates a new object by calling the `new(packet)` static
-function of `Stats`.
-
-At the end, it returns the updated vector of stats.
-
-### network_analyzer::sniffer::channel::SnifferChannel
-
-The `SnifferChannel` type.
-
-It is used to let the sniffer communicate with its subscribers by sending messages.<br>
-It contains a vector of `Sender<Message>`, one for each subscriber.
-
-```rust
-pub(crate) fn new() -> Self
-```
-
-Creates a new `SnifferChannel` object and populate it with an empty array of senders.
-
-```rust
-pub(crate) fn subscribe(&mut self) -> Receiver<Message>
-```
-
-Creates a new communication channel and returns the receiver.
-
-This method use the `std::sync::mpsc::channel()` function to create
-a `Sender`, which will be added to the `SnifferChannel` and a `Receiver`,
-which will be returned to the subscriber.
-
-```rust
-pub(crate) fn send(&mut self, message: Message)
-```
-
-Sends a `Message` to all the subscribers.
-
-The method slides the senders vector and checks if each of them is still valid.<br>
-It calls the `send(message)` method of the `Sender` that attempts to send the
-message and returns an error if the `Receiver` has been already deallocated.<br>
-In this case, the sender is removed from the vector.
-
-### network_analyzer::sniffer::channel::Message
-
-The `Message` type.
-
-It is an enumeration that contains the message sent in the `SnifferChannel`,
-that can be either a `NAError`, a `NAState` or a `NAPacket`.<br>
-This type implements the `Clone` trait.
