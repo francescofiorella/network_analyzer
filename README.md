@@ -33,6 +33,32 @@ In this way, the user can correctly visualize the list, independently of the fol
 operations.<br>
 At the end, a "sniffing start" message is shown.
 
+
+```rust
+fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window
+```
+
+Initializes the GUI by defining the main window with its dimensions, the boxes inside it
+with their positions and format the parameters received by putting them inside the top right box.
+
+Moreover, if running on MacOS or Linux, it calls the resize command of the terminal to define its dimensions.
+
+This function receives as parameters:
+1) adapter &[str] containing the network adapter
+2) filter &[Filter] containing the filter chosen, if any
+3) output path &[str] containing the path where the file will be saved
+4) update time [u64]
+
+
+```rust
+fn state_win_init() -> Window
+```
+
+Initializes the box containing the execution state of the program, by defining its dimensions and positions.
+
+It returns a [Window] with a new box inside that as default contains "*** SNIFFING PACKETS ***".
+
+
 ```rust
 pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>)
 ```
@@ -49,6 +75,25 @@ fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mu
 ```
 Refreshes the state window with the current `Sniffer`'s state
 Everytime a 'state change message' is sent from the Sniffer object, the tui's state window is refreshed
+
+```rust
+fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mutex: Arc<Mutex<()>>)
+```
+
+Prints an `NAError` in different ways depending if the TUI is enabled or not.
+
+This function receives as parameters:
+1) `Option<&Window>` that contains the main Window or None if the TUI is not enabled
+2) `NAError` object containing the actual error to print
+3) `bool` tui_enabled that specifies if the TUI is enabled or not
+4) `Arc<Mutex<()>>` to manage the use of `printw` function.
+   If the TUI is enabled, the function will:
+5) Lock the mutex
+6) Print the error inside the state box of the main window
+7) Release the lock
+
+Otherwise, if TUI is not enabled, it prints the error using the `println!` macro.
+
 
 ```rust
 fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, tui_mutex: Arc<Mutex<()>>)
@@ -70,6 +115,16 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
 2) Prints the command window and enables the arrow keys
 3) Waits in loop (through a blocking getch) for user user commands (arrow key pressure / enter)
 4) Calls the function associated to the selected command
+
+```rust
+fn notui_event_handler(sniffer: &mut Sniffer)
+```
+Manages the user interaction when the TUI is not enabled.
+
+This function performs the following operations:
+1) Waits in loop (through a blocking read_line) for user commands (keys p,q,r pressure / enter)
+2) Calls the function associated to the selected command and prints the new execution state. 
+If the key pressed is not defined, "Undefined command" will be printed and the state won't change.
 
 ```rust
 fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>)
@@ -175,7 +230,68 @@ This method tries to acquire the inner Mutex, so it blocks until it is free.
 Then the NAState is cloned and returned.
 
  ### network_analyzer::sniffer::NAPacket
- 
+
+The struct `NAPacket` describes the packet sniffed and keeps the most relevant network information like:
+* source and destination MAC addresses
+* level 3 protocol type
+* source and destination level 3 adresses (IPv4 or IPv6)
+* packet length (in bytes)
+* transported protocol
+* source and destination ports (if any)
+* timestamp.
+  
+Moreover, it is also responsible for:
+1) formatting the `NAPacket` information to be printed out better on the screen
+2) filtering the `NAPacket` using a filter tag defining transported protocol, IP addresses, ports or packet
+3) casting integers extracted from pcap `Packet` library into MAC addresses, IP addresses (v4 and v6) and level 3 and 4 transported protocols. 
+
+```rust
+pub fn new(pcap_packet: Packet) -> Self
+```
+Creates a new `NAPacket` object starting from a `Packet` of `pcap` library.
+
+This function accesses specific bytes of the `pcap::Packet` object containing relevant information
+such as transported protocols, source and destination ports, addresses and so on which are casted using appropriate functions.
+
+```rust
+pub fn to_string_mac(&self) -> String
+```
+Formats the `NAPacket` source and destination MAC addresses.
+
+This function returns a `String` containing source and destination MAC addresses properly formatted to appear on the terminal.
+
+```rust
+pub fn to_string_endpoints(&self) -> String
+```
+Formats the `NAPacket` source and destination level 3 addresses (IPv4 or IPv6).
+
+This function returns a `String` containing source and destination addresses properly formatted to appear on the terminal.
+
+Since IPv6 addresses can be longer then IPv4 ones, they cannot appear in the same line
+otherwise can generate issues when displayed on the terminal.
+It evaluates the space to put between the addresses based on their length, and then inserts it in the middle of the two.
+
+
+```rust
+pub fn to_string_ports(&self) -> String
+```
+Formats the `NAPacket` source and destination ports.
+
+This function returns a [`String`] containing the source and destination ports properly formatted to appear on the terminal.
+
+```rust
+pub fn info(&self) -> String
+```
+Formats the `NAPacket` transported protocols, length and timestamp.
+
+This function returns a `String` containing the 
+* protocols transported
+* length 
+* timestamp 
+
+properly formatted to appear on the terminal.
+
+
 ```rust
 pub fn filter(&self, filter: Filter) -> bool
 ```
@@ -193,6 +309,59 @@ pub fn filter(&self, filter: Filter) -> bool
 - The filter is `Filter::None` => `true` is returned whatever packet is inspected
 
 ### network_analyzer::sniffer::na_packet::protocols
+
+```rust
+pub(crate) fn to_mac_address(p: &[u8], start: usize) -> String
+```
+Casts a sequence of bytes into a MAC address.
+
+This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the MAC address and
+returns a `String` containing the MAC address properly formatted.
+
+
+```rust
+pub(crate) fn to_ip_address(p: &[u8], start: usize) -> String
+```
+
+Casts a sequence of bytes into an IPv4 address.
+
+This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the IPv4 address and
+returns a `String` containing the IPv4 address properly formatted.
+
+```rust
+pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String
+```
+Casts a sequence of bytes into an IPv6 address.
+
+This function takes a `&[u8]` representing a `Packet` of `pcap` library and a `usize` as index from which start to extract the IPv6 address and
+returns a `String` containing the IPv6 address properly formatted.
+
+```rust
+pub(crate) fn to_transported_protocol(prot_num: u8) -> String
+```
+Converts an integer value into the corresponding transported protocol.
+
+This function takes a `u8` representing the value written inside the protocol field of a pcap `Packet` and returns a `String`
+containing the actual transported protocol's name.
+
+The range of admissible values ranges from 1 to 142 (extremes included) excluding 43, 44, 51, 60 and 135.
+All the values outside this range will return a `String` containing "Unknown".
+
+```rust
+pub(crate) fn to_level_three_protocol(prot_num: u16) -> String
+```
+Converts an integer value into the corresponding level 3 protocol.
+
+This function takes a `u16` representing the hexadecimal value written inside the 2 bytes of the protocol field of a pcap `Packet` and returns a `String`
+containing the actual level 3 protocol's name.
+
+The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
+0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
+0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
+0x8906, 0x8914, 0x8915, 0x891D, 0x893A, 0x892F, 0x9000, 0xF1C1.
+
+All the values outside this range will return a `String` containing "Unknown".
+
 
 ```rust
 pub(crate) fn get_ipv6_transported_protocol(p: &[u8], (next_header_index, remaining_size): (usize, usize)) -> (String, usize)
@@ -214,6 +383,20 @@ of the first header and then calls again the function (in a recursive call),
 otherwise it calls `to_transported_protocol(prot_num)` and returns.
 
 It panics if the index exceed the array length.
+
+### network_analyzer::sniffer::NAError
+
+The struct `NAError` defines custom error messages.
+
+It contains a message of type `String` that includes a brief description of the error occurred, depending on the function
+that calls it.
+It implements Display and Error traits.
+
+```rust
+pub(crate) fn new(msg: &str) -> Self
+```
+Creates a new `NAError` object starting from a &str msg received as parameter.
+
 
 ### network_analyzer::sniffer::Filter
 

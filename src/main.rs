@@ -73,8 +73,13 @@ fn notui_show_commands() {
 ///
 /// Moreover, if running on MacOS or Linux, it calls the resize command of the terminal to define its dimensions.
 ///
-/// This function receives as parameters the adapter, filter, output path and update time defined from the command line and
-/// returns a [Window] including them inside the top right box.
+/// This function receives as parameters:
+/// 1) adapter &[str] containing the network adapter
+/// 2) filter &[Filter] containing the filter chosen, if any
+/// 3) output path &[str] containing the path where the file will be saved
+/// 4) update time [u64]
+///
+/// and returns a [Window] including them inside the top right box.
 fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window {
     //screen initialization
     if cfg!(target_os = "macos") {
@@ -205,7 +210,7 @@ fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mu
 /// 1) `Option<&Window>` that contains the main Window or None if the TUI is not enabled
 /// 2) `NAError` object containing the actual error to print
 /// 3)  [bool] `tui_enabled` that specifies if the TUI is enabled or not
-/// 4) `Arc<Mutex<()>>` to print on the main window using the `printw` function.
+/// 4) `Arc<Mutex<()>>` to manage the use of `printw` function.
 ///
 /// If the TUI is enabled, the function will:
 /// 1) Lock the mutex
@@ -333,12 +338,12 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
     }
 }
 
-/// Manages the user interaction when using TUI.
+/// Manages the user interaction when the TUI is not enabled.
 ///
 /// This function performs the following operations:
-///1) Waits in loop (through a blocking read_line) for user user commands (keyboard p,q,r pressure / enter)
+///1) Waits in loop (through a blocking read_line) for user commands (keys p,q,r pressure / enter)
 ///2) Calls the function associated to the selected command and prints the new execution state.
-/// If the key pressed is not defined, "Undefined command" will be printed.
+/// If the key pressed is not defined, "Undefined command" will be printed and the state won't change.
 fn notui_event_handler(sniffer: &mut Sniffer) {
     //event loop
     loop {

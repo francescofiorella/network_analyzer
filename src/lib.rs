@@ -259,14 +259,14 @@ pub mod sniffer {
         use crate::sniffer::format::{option_to_string, to_u16};
         use crate::sniffer::na_packet::protocols::{get_ipv6_transported_protocol, to_ip_address, to_ipv6_address, to_level_three_protocol, to_mac_address, to_transported_protocol};
 
-        /// The struct `NAPacket` describes the packet sniffed, keeping the most relevant network information like:
+        /// The struct `NAPacket` describes the packet sniffed and keeps the most relevant network information like:
         /// * source and destination MAC addresses
         /// * level 3 protocol type
         /// * source and destination level 3 adresses (IPv4 or IPv6)
         /// * packet length (in bytes)
         /// * transported protocol
         /// * source and destination ports (if any)
-        /// * timestamp
+        /// * timestamp.
         ///
         /// Moreover, it is also responsible for:
         /// 1) formatting the `NAPacket` information to be printed out better on the screen
@@ -296,6 +296,9 @@ pub mod sniffer {
         impl NAPacket {
 
             /// Creates a new `NAPacket` object starting from a `Packet` of `pcap` library.
+            ///
+            /// This function accesses specific bytes of the `pcap::Packet` object containing relevant information
+            /// such as transported protocols, source and destination ports, addresses etc ... which are casted using appropriate functions.
 
             pub fn new(pcap_packet: Packet) -> Self {
                 let mut source_address = None;
@@ -443,7 +446,7 @@ pub mod sniffer {
             }
             /// Formats the `NAPacket` source and destination MAC addresses.
             ///
-            /// This function returns a [`String`] containing source and destination MAC addresses properly formatted to appear on the terminal.
+            /// This function returns a [String] containing source and destination MAC addresses properly formatted to appear on the terminal.
 
             pub fn to_string_mac(&self) -> String {
                 let mut s = String::new();
@@ -598,10 +601,10 @@ pub mod sniffer {
                 ).to_string()
             }
 
-    /// Casts a sequence of bytes into an IPv4 address.
+    /// Casts a sequence of bytes into an IPv6 address.
     ///
-    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv4 address and
-    /// returns a [String] containing the IPv4 address properly formatted.
+    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv6 address and
+    /// returns a [String] containing the IPv6 address properly formatted.
             pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String {
                 Ipv6Addr::new(
                     to_u16(p, start),
@@ -773,7 +776,7 @@ pub mod sniffer {
     /// The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
     /// 0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
     /// 0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
-    /// 0x8906, 0x8914, 0x8915, 0x891D, 0x893a, 0x892F, 0x9000, 0xF1C1.
+    /// 0x8906, 0x8914, 0x8915, 0x891D, 0x893A, 0x892F, 0x9000, 0xF1C1.
     ///
     /// All the values outside this range will return a [String] containing "Unknown".
 
@@ -881,7 +884,7 @@ pub mod sniffer {
 
         #[derive(Debug, Clone)]
 
-        /// This struct `NAError` is used to define custom error messages.
+        /// The struct `NAError` defines custom error messages.
         ///
         /// It contains a message of type [String] that includes a brief description of the error occurred, depending on the function
         /// that calls it.
