@@ -154,6 +154,29 @@ it waits for the termination of all the secondary threads, before closing.
 
 ## Network Analyzer Library
 
+`network_analyzer` is a multi-platform library that provides structs and functions to manage a sniffing process,
+capable of intercepting incoming and outgoing traffic through the network interfaces of a computer.<br>
+The sniffed network adapter is set in promiscuous mode: packets are collected, along with their IP addresses,
+ports and protocol type.
+
+Periodically, a textual report (in `.xm` and `.md` formats) is generated, describing a synthesis of the
+observed events.<br>
+The traffic is divided in flows and the library shows for each of the network address/port pairs,
+the protocol that was transported, the cumulated number of bytes transmitted, the timestamp of the
+first and last occurrence of information exchange.
+
+A `Sniffer` struct is exposed: it is the main object that can be initialized and that offers some methods
+to control the sniffing process (`pause`, `resume`, `stop`) and others to connect directly an application
+in order to receive notifications (`subscribe`).
+
+When the sniffer is running, packets are collected and shown as `NAPacket` instances, that contain
+the MAC and IP addresses, the level three and the transported protocols, the timestamp and the ports.
+
+Moreover, the sniffer state (`NAState`), the usable filters (`Filter`) and the possible errors (`NAError`)
+are exposed, along with a `Message` struct, sent into a channel used to communicate with the application.
+
+Finally, a sample application is provided that shows how to properly use the library.
+
 ### network_analyzer::sniffer
 
 ```rust
