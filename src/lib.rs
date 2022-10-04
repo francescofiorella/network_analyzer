@@ -55,7 +55,6 @@ pub mod sniffer {
     }
 
     impl Sniffer {
-
         ///Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String),
         /// output file update time (u64), filter (String)) or returns an `NAError`.
 
@@ -272,7 +271,6 @@ pub mod sniffer {
         /// 1) formatting the `NAPacket` information to be printed out better on the screen
         /// 2) filtering the `NAPacket` using a filter tag defining transported protocol, IP addresses, ports or packet
         /// 3) casting integers extracted from pcap `Packet` library into MAC addresses, IP addresses (v4 and v6) and level 3 and 4 transported protocols.
-
         #[derive(Debug, Clone)]
         pub struct NAPacket {
             //level 2 header
@@ -294,7 +292,6 @@ pub mod sniffer {
         }
 
         impl NAPacket {
-
             /// Creates a new `NAPacket` object starting from a `Packet` of `pcap` library.
             ///
             /// This function accesses specific bytes of the `pcap::Packet` object containing relevant information
@@ -322,45 +319,43 @@ pub mod sniffer {
 
                         //UDP
                         if prot_num == 17 {
-                            match (source_port.unwrap(),destination_port.unwrap()) {
+                            match (source_port.unwrap(), destination_port.unwrap()) {
                                 //well known ports (0-1023)
-                                (53,_) => transported_protocol = Some("UDP (DNS Response)".to_string()),
-                                (_,53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
-                                (67,_) | (_,67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
-                                (68,_) | (_,68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
-                                (443,_) | (_,443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
-                                (1900,_) | (_, 1900) => transported_protocol = Some("UDP (SSDP)".to_string()),
+                                (53, _) => transported_protocol = Some("UDP (DNS Response)".to_string()),
+                                (_, 53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
+                                (67, _) | (_, 67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
+                                (68, _) | (_, 68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
+                                (443, _) | (_, 443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
+                                (1900, _) | (_, 1900) => transported_protocol = Some("UDP (SSDP)".to_string()),
                                 //others
-                                (5353,_) | (_,5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
-                                _ => () ,
+                                (5353, _) | (_, 5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
+                                _ => (),
                             }
                         }
 
                         //TCP
                         if prot_num == 6 {
-                            match (source_port.unwrap(),destination_port.unwrap()) {
+                            match (source_port.unwrap(), destination_port.unwrap()) {
                                 //well known ports (0-1023)
-                                (20,_) | (_,20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
-                                (21,_) | (_,21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
-                                (22,_) | (_,22) => transported_protocol = Some("TCP (SSH)".to_string()),
-                                (23,_) | (_,23) => transported_protocol = Some("TCP (Telnet)".to_string()),
-                                (25,_) | (_,25) => transported_protocol = Some("TCP (SMTP)".to_string()),
-                                (80,_) | (_,80) => transported_protocol = Some("TCP (HTTP)".to_string()),
-                                (110,_) | (_,110) => transported_protocol = Some("TCP (POP)".to_string()),
-                                (143,_) | (_,143) => transported_protocol = Some("TCP (IMAP4)".to_string()),
-                                (443,_) | (_,443) => transported_protocol = Some("TCP (HTTPS)".to_string()),
-                                (465,_) | (_,465) => transported_protocol = Some("TCP (SMTPS)".to_string()),
-                                (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
-                                (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
-                                (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
-                                (1900,_) | (_, 1900) => transported_protocol = Some("TCP (SSDP)".to_string()),
+                                (20, _) | (_, 20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
+                                (21, _) | (_, 21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
+                                (22, _) | (_, 22) => transported_protocol = Some("TCP (SSH)".to_string()),
+                                (23, _) | (_, 23) => transported_protocol = Some("TCP (Telnet)".to_string()),
+                                (25, _) | (_, 25) => transported_protocol = Some("TCP (SMTP)".to_string()),
+                                (80, _) | (_, 80) => transported_protocol = Some("TCP (HTTP)".to_string()),
+                                (110, _) | (_, 110) => transported_protocol = Some("TCP (POP)".to_string()),
+                                (143, _) | (_, 143) => transported_protocol = Some("TCP (IMAP4)".to_string()),
+                                (443, _) | (_, 443) => transported_protocol = Some("TCP (HTTPS)".to_string()),
+                                (465, _) | (_, 465) => transported_protocol = Some("TCP (SMTPS)".to_string()),
+                                (587, _) | (_, 587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
+                                (993, _) | (_, 993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
+                                (995, _) | (_, 995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                (1900, _) | (_, 1900) => transported_protocol = Some("TCP (SSDP)".to_string()),
                                 //others
-                                (5353,_) | (_,5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
-                                _ => () ,
+                                (5353, _) | (_, 5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
+                                _ => (),
                             }
                         }
-
-
                     }
                     // IPv6
                     0x86DD => {
@@ -377,45 +372,45 @@ pub mod sniffer {
 
                         //UDP
                         if prot == "UDP" {
-                            match (source_port.unwrap(),destination_port.unwrap()) {
+                            match (source_port.unwrap(), destination_port.unwrap()) {
                                 //well known ports (0-1023)
-                                (53,_) => transported_protocol = Some("UDP (DNS Response)".to_string()),
-                                (_,53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
-                                (67,_) | (_,67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
-                                (68,_) | (_,68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
-                                (443,_) | (_,443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
+                                (53, _) => transported_protocol = Some("UDP (DNS Response)".to_string()),
+                                (_, 53) => transported_protocol = Some("UDP (DNS Query)".to_string()),
+                                (67, _) | (_, 67) => transported_protocol = Some("UDP (DHCP Server)".to_string()),
+                                (68, _) | (_, 68) => transported_protocol = Some("UDP (DHCP Client)".to_string()),
+                                (443, _) | (_, 443) => transported_protocol = Some("UDP (HTTPS)".to_string()),
                                 (546, 547) => transported_protocol = Some("UDP (DHCPv6 req.)".to_string()),
                                 (547, 546) => transported_protocol = Some("UDP (DHCPv6 resp.)".to_string()),
-                                (1900,_) | (_, 1900) => transported_protocol = Some("UDP (SSDP)".to_string()),
+                                (1900, _) | (_, 1900) => transported_protocol = Some("UDP (SSDP)".to_string()),
                                 //others
-                                (5353,_) | (_,5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
-                                _ => () ,
+                                (5353, _) | (_, 5353) => transported_protocol = Some("UDP (MDNS)".to_string()),
+                                _ => (),
                             }
                         }
 
                         //TCP
                         if prot == "TCP" {
-                            match (source_port.unwrap(),destination_port.unwrap()) {
+                            match (source_port.unwrap(), destination_port.unwrap()) {
                                 //well known ports (0-1023)
-                                (20,_) | (_,20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
-                                (21,_) | (_,21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
-                                (22,_) | (_,22) => transported_protocol = Some("TCP (SSH)".to_string()),
-                                (23,_) | (_,23) => transported_protocol = Some("TCP (Telnet)".to_string()),
-                                (25,_) | (_,25) => transported_protocol = Some("TCP (SMTP)".to_string()),
-                                (80,_) | (_,80) => transported_protocol = Some("TCP (HTTP)".to_string()),
-                                (110,_) | (_,110) => transported_protocol = Some("TCP (POP)".to_string()),
-                                (143,_) | (_,143) => transported_protocol = Some("TCP (IMAP4)".to_string()),
-                                (443,_) | (_,443) => transported_protocol = Some("TCP (HTTPS)".to_string()),
-                                (465,_) | (_,465) => transported_protocol = Some("TCP (SMTPS)".to_string()),
+                                (20, _) | (_, 20) => transported_protocol = Some("TCP (FTP Data)".to_string()),
+                                (21, _) | (_, 21) => transported_protocol = Some("TCP (FTP Control)".to_string()),
+                                (22, _) | (_, 22) => transported_protocol = Some("TCP (SSH)".to_string()),
+                                (23, _) | (_, 23) => transported_protocol = Some("TCP (Telnet)".to_string()),
+                                (25, _) | (_, 25) => transported_protocol = Some("TCP (SMTP)".to_string()),
+                                (80, _) | (_, 80) => transported_protocol = Some("TCP (HTTP)".to_string()),
+                                (110, _) | (_, 110) => transported_protocol = Some("TCP (POP)".to_string()),
+                                (143, _) | (_, 143) => transported_protocol = Some("TCP (IMAP4)".to_string()),
+                                (443, _) | (_, 443) => transported_protocol = Some("TCP (HTTPS)".to_string()),
+                                (465, _) | (_, 465) => transported_protocol = Some("TCP (SMTPS)".to_string()),
                                 (546, 547) => transported_protocol = Some("TCP (DHCPv6 req.)".to_string()),
                                 (547, 546) => transported_protocol = Some("TCP (DHCPv6 resp.)".to_string()),
-                                (587,_) | (_,587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
-                                (993,_) | (_,993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
-                                (995,_) | (_,995) => transported_protocol = Some("TCP (POP3S)".to_string()),
-                                (1900,_) | (_, 1900) => transported_protocol = Some("TCP (SSDP)".to_string()),
+                                (587, _) | (_, 587) => transported_protocol = Some("TCP (SMTP Subm)".to_string()),
+                                (993, _) | (_, 993) => transported_protocol = Some("TCP (IMAP4S)".to_string()),
+                                (995, _) | (_, 995) => transported_protocol = Some("TCP (POP3S)".to_string()),
+                                (1900, _) | (_, 1900) => transported_protocol = Some("TCP (SSDP)".to_string()),
                                 //others
-                                (5353,_) | (_,5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
-                                _ => () ,
+                                (5353, _) | (_, 5353) => transported_protocol = Some("TCP (MDNS)".to_string()),
+                                _ => (),
                             }
                         }
                     }
@@ -472,13 +467,12 @@ pub mod sniffer {
                     (s, d) if s.contains(":") && d.contains(":") => {
                         let svec = s.as_str().split(":").collect::<Vec<&str>>();
                         let dvec = d.as_str().split(":").collect::<Vec<&str>>();
-                        let sp = if svec.len() > 4 && dvec.len() > 4 {"\n"} else {"\t"};
+                        let sp = if svec.len() > 4 && dvec.len() > 4 { "\n" } else { "\t" };
                         sp
-
                     }
                     _ => "\t"
                 };
-                
+
                 s.push_str(&*("IP_s: ".to_owned() + &option_to_string(self.source_address.clone()) + space
                     + &*"IP_d: ".to_owned() + &option_to_string(self.destination_address.clone())));
                 s
@@ -538,7 +532,7 @@ pub mod sniffer {
                             return port == self.source_port.unwrap() || port == self.destination_port.unwrap();
                         }
                         false
-                    },
+                    }
 
                     Filter::LT(len) => self.total_length < len,
 
@@ -571,10 +565,10 @@ pub mod sniffer {
             use mac_address::MacAddress;
             use crate::sniffer::format::to_u16;
 
-    /// Casts a sequence of bytes into a MAC address.
-    ///
-    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the MAC address and
-    /// returns a [String] containing the MAC address properly formatted.
+            /// Casts a sequence of bytes into a MAC address.
+            ///
+            /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the MAC address and
+            /// returns a [String] containing the MAC address properly formatted.
 
             pub(crate) fn to_mac_address(p: &[u8], start: usize) -> String {
                 MacAddress::new([
@@ -587,10 +581,10 @@ pub mod sniffer {
                 ]).to_string()
             }
 
-    /// Casts a sequence of bytes into an IPv4 address.
-    ///
-    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv4 address and
-    /// returns a [String] containing the IPv4 address properly formatted.
+            /// Casts a sequence of bytes into an IPv4 address.
+            ///
+            /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv4 address and
+            /// returns a [String] containing the IPv4 address properly formatted.
 
             pub(crate) fn to_ip_address(p: &[u8], start: usize) -> String {
                 Ipv4Addr::new(
@@ -601,10 +595,10 @@ pub mod sniffer {
                 ).to_string()
             }
 
-    /// Casts a sequence of bytes into an IPv6 address.
-    ///
-    /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv6 address and
-    /// returns a [String] containing the IPv6 address properly formatted.
+            /// Casts a sequence of bytes into an IPv6 address.
+            ///
+            /// This function takes a `&[u8]` representing a `Packet` of `pcap` library and a [usize] as index from which start to extract the IPv6 address and
+            /// returns a [String] containing the IPv6 address properly formatted.
             pub(crate) fn to_ipv6_address(p: &[u8], start: usize) -> String {
                 Ipv6Addr::new(
                     to_u16(p, start),
@@ -618,13 +612,13 @@ pub mod sniffer {
                 ).to_string()
             }
 
-    /// Converts an integer value into the corresponding transported protocol.
-    ///
-    /// This function takes a [u8] representing the value written inside the protocol field of a pcap `Packet` and returns a [String]
-    /// containing the actual transported protocol's name.
-    ///
-    /// The range of admissible values ranges from 1 to 142 (extremes included) excluding 43, 44, 51, 60 and 135.
-    /// All the values outside this range will return a [String] containing "Unknown".
+            /// Converts an integer value into the corresponding transported protocol.
+            ///
+            /// This function takes a [u8] representing the value written inside the protocol field of a pcap `Packet` and returns a [String]
+            /// containing the actual transported protocol's name.
+            ///
+            /// The range of admissible values ranges from 1 to 142 (extremes included) excluding 43, 44, 51, 60 and 135.
+            /// All the values outside this range will return a [String] containing "Unknown".
 
             pub(crate) fn to_transported_protocol(prot_num: u8) -> String {
                 match prot_num {
@@ -768,17 +762,17 @@ pub mod sniffer {
                 }.to_string()
             }
 
-    /// Converts an integer value into the corresponding level 3 protocol.
-    ///
-    /// This function takes a [u16] representing the hexadecimal value written inside the 2 bytes of the protocol field of a pcap `Packet` and returns a [String]
-    /// containing the actual level 3 protocol's name.
-    ///
-    /// The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
-    /// 0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
-    /// 0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
-    /// 0x8906, 0x8914, 0x8915, 0x891D, 0x893A, 0x892F, 0x9000, 0xF1C1.
-    ///
-    /// All the values outside this range will return a [String] containing "Unknown".
+            /// Converts an integer value into the corresponding level 3 protocol.
+            ///
+            /// This function takes a [u16] representing the hexadecimal value written inside the 2 bytes of the protocol field of a pcap `Packet` and returns a [String]
+            /// containing the actual level 3 protocol's name.
+            ///
+            /// The list of the accepted hexadecimal values is: 0x0800, 0x86DD, 0x0806, 0x8035, 0x0842, 0x22F0, 0x22F3, 0x22EA, 0x6002, 0x6003, 0x6004
+            /// 0x809B, 0x80F3, 0x8100, 0x8102, 0x8103, 0x8137, 0x8204, 0x8808, 0x8809, 0x8819, 0x8847, 0x8848, 0x8863, 0x8864, 0x887B, 0x888E, 0x8892, 0x889A,
+            /// 0x88A2, 0x88A4, 0x88A8, 0x88AB, 0x88B8, 0x88B9, 0x88BA, 0x88BF, 0x88CC, 0x88CD, 0x88E1, 0x88E3, 0x88E5, 0x88E7, 0x88F7, 0x88F8, 0x88FB, 0x8902,
+            /// 0x8906, 0x8914, 0x8915, 0x891D, 0x893A, 0x892F, 0x9000, 0xF1C1.
+            ///
+            /// All the values outside this range will return a [String] containing "Unknown".
 
             pub(crate) fn to_level_three_protocol(prot_num: u16) -> String {
                 match prot_num {
@@ -883,7 +877,6 @@ pub mod sniffer {
         use std::fmt::{Display, Formatter};
 
         #[derive(Debug, Clone)]
-
         /// The struct `NAError` defines custom error messages.
         ///
         /// It contains a message of type [String] that includes a brief description of the error occurred, depending on the function
@@ -932,7 +925,7 @@ pub mod sniffer {
             LE(u32),
             EQ(u32),
             GT(u32),
-            GE(u32)
+            GE(u32),
         }
 
         impl ToString for Filter {
@@ -947,7 +940,7 @@ pub mod sniffer {
                         let mut s = String::from("port ");
                         s.push_str(&port.to_string());
                         s
-                    },
+                    }
                     Filter::LT(len) => ("length < ".to_owned() + len.to_string().as_str()).to_string(),
                     Filter::LE(len) => ("length <= ".to_owned() + len.to_string().as_str()).to_string(),
                     Filter::EQ(len) => ("length = ".to_owned() + len.to_string().as_str()).to_string(),
@@ -1018,7 +1011,7 @@ pub mod sniffer {
                         Err(_) => Err(NAError::new("Not a valid packet length")),
                         Ok(len) => Ok(Filter::LE(len))
                     }
-                },
+                }
 
                 //length (ge)
                 string if string.starts_with(">=") => {
@@ -1029,7 +1022,7 @@ pub mod sniffer {
                         Err(_) => Err(NAError::new("Not a valid packet length")),
                         Ok(len) => Ok(Filter::GE(len))
                     }
-                },
+                }
 
                 //length (eq)
                 string if string.starts_with("=") => {
@@ -1039,7 +1032,7 @@ pub mod sniffer {
                         Err(_) => Err(NAError::new("Not a valid packet length")),
                         Ok(len) => Ok(Filter::EQ(len))
                     }
-                },
+                }
                 //length (gt)
                 string if string.starts_with(">") => {
                     let mut string = string.to_string();
@@ -1048,7 +1041,7 @@ pub mod sniffer {
                         Err(_) => Err(NAError::new("Not a valid packet length")),
                         Ok(len) => Ok(Filter::GT(len))
                     }
-                },
+                }
 
                 //length (lt)
                 string if string.starts_with("<") => {
@@ -1058,8 +1051,7 @@ pub mod sniffer {
                         Err(_) => Err(NAError::new("Not a valid packet length")),
                         Ok(len) => Ok(Filter::LT(len))
                     }
-                },
-
+                }
 
                 _ => Err(NAError::new("Unavailable filter")),
             }
@@ -1140,8 +1132,12 @@ pub mod sniffer {
             writeln!(report_md).expect("Unable to write the report file!");
 
             if vec.is_empty() {
-                writeln!(report_md, "No traffic detected!").expect("Unable to write the report file!");
-                writeln!(report_xml, "<report>No traffic detected!</report>").expect("Unable to write the report file!");
+                writeln!(report_md, "No traffic detected!")
+                    .expect("Unable to write the report file!");
+                writeln!(report_xml, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
+                    .expect("Unable to write the report file!");
+                writeln!(report_xml, "<report>No traffic detected!</report>")
+                    .expect("Unable to write the report file!");
                 /*if !tui {
                     println!("Report produced!");
                 }*/
@@ -1152,6 +1148,8 @@ pub mod sniffer {
             writeln!(report_md, "| Endpoint 1 IP | Endpoint 1 Port | Endpoint 2 IP | Endpoint 2 Port | Level Three Protocol | Transported Protocol | Bytes Transmitted | First Timestamp | Last Timestamp |")
                 .expect("Unable to write the report file!");
             writeln!(report_md, "|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|:----:|")
+                .expect("Unable to write the report file!");
+            writeln!(report_xml, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>")
                 .expect("Unable to write the report file!");
             writeln!(report_xml, "<report>").expect("Unable to write the report file!");
 
