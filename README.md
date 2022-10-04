@@ -12,7 +12,20 @@
 * `--output (-o)`: String (default "report") defining the name of the output file (.md / .xml where the report is written)
 * `--update-time (-u)`: u64 number (default 10000) defining the output file update time (in milliseconds)
 * `--filter (-f)`: String (default "None") defining a packet filter
+
+     > <b>Available filter strings:</b>
+     > * "IPv4"  -   filters by level 3 type (only IPv4 packets)
+     > * "IPv6"  -   filters by level 3 type (only IPv6 packets)
+     > * "ARP"  -   filters by level 3 type (only ARP packets)
+     > * "<i>specific IP</i>" (v4 or v6) either as source or destination (<i> Example: "192.168.1.1" or "2001:db8::2:1"</i>)
+     > * "<i>port</i>"  -  filters only packets having as source or destination port the given one (<i> Example: "443"</i>)
+     > * "><i>length</i>"  -   filters only packets whose length is greater than the given length (in bytes) (<i> Example: ">50"</i>)
+     > * "<<i>length</i>"  -  filters only packets whose length is less than the given length (in bytes) (<i> Example: "<50"</i>)
+     > * ">=<i>length</i>"  -   filters only packets whose length is greater or equal to the given length (in bytes) (<i> Example: ">=50"</i>)
+     > * "<=<i>length</i>"  -  filters only packets whose length is less or equal to the given length (in bytes) (<i> Example: "<=50"</i>)
+     > * "=<i>length</i>"  -  filters only packets whose length is equal to the given length (in bytes) (<i> Example: ">=50"</i>)
 * `--tui (-t)`: bool (default "false") enabling the `tui mode`
+
 * `--list-adapters (-l)`: bool (default "false") showing the list of available network adapters to be sniffed, together with the associated index.
 
 ### Functions explanation
@@ -424,6 +437,8 @@ Creates a new `NAError` object starting from a &str msg received as parameter.
 ### network_analyzer::sniffer::Filter
 
 Enumerates the different filtering categories offered by the network_analyzer library.
+The filter to be used is defined as CLI argument, by passing an appropriate filter string preceeded by flag -f (--filter as long notation) [see Application > CLI Arguments section]
+
 It also implements the `ToString` trait, allowing a correct transformation of `Filter`'s
 tag (and possible detail) into a proper string representation.
 <br></br>
