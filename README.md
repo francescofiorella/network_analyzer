@@ -2,28 +2,26 @@
 
 ## Network Analyzer Library
 
-`network_analyzer` is a multi-platform library that provides structs and functions to manage a sniffing process,
+`network_analyzer` is a multi-platform library that provides structures and functions to manage a sniffing process,
 capable of intercepting incoming and outgoing traffic through the network interfaces of a computer.<br>
-The sniffed network adapter is set in promiscuous mode: packets are collected, along with their IP addresses,
+The sniffed network adapter is set in promiscuous mode: packets are collected, together with their IP addresses,
 ports and protocol type.
 
-Periodically, a textual report (in `.xm` and `.md` formats) is generated, describing a synthesis of the
+Periodically, a textual report (in `.xml` and `.md` formats) is generated, describing a synthesis of the
 observed events.<br>
 The traffic is divided in flows and the library shows for each of the network address/port pairs,
 the protocol that was transported, the cumulated number of bytes transmitted, the timestamp of the
 first and last occurrence of information exchange.
 
-A `Sniffer` struct is exposed: it is the main object that can be initialized and that offers some methods
-to control the sniffing process (`pause`, `resume`, `stop`) and others to connect directly an application
-in order to receive notifications (`subscribe`).
+A `Sniffer` struct is exposed: it is the main object that can be initialized and that offers methods
+to control the sniffing process (`pause`, `resume`, `stop`) and methods to establish a connection with an application (`subscribe`).
 
-When the sniffer is running, packets are collected and shown as `NAPacket` instances, that contain
-the MAC and IP addresses, the level three and the transported protocols, the timestamp and the ports.
+While the sniffer is running, packets are collected and shown as `NAPacket` instances, which include informations such as
+MAC and IP addresses, level three and the transported protocols, timestamps and ports.
 
-Moreover, the sniffer state (`NAState`), the usable filters (`Filter`) and the possible errors (`NAError`)
-are exposed, along with a `Message` struct, sent into a channel used to communicate with the application.
+Moreover, the library exposes other structures representing the sniffer state (`NAState`), the available filters (`Filter`) and the possible errors (`NAError`), along with a `Message` that is transmitted into a communication channel between sniffer and application.
 
-Finally, a sample application is provided that shows how to properly use the library.
+Finally, a sample application is provided to demonstrate how to properly use the library.
 
 ### network_analyzer::sniffer
 
