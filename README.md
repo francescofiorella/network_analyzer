@@ -1,6 +1,5 @@
 # DOCs
 
-<<<<<<< HEAD
 ## Application
 
 ### Pictures of FCC Network Analyzer v1.0, in tui mode
@@ -168,8 +167,6 @@ These methods will print the message on the stdout or on the tui (if enabled).
 Then, a new loop is initialized in the main thread, that listens for inputs and, in the end,
 it waits for the termination of all the secondary threads, before closing.
 
-=======
->>>>>>> 1d350a8c8cb807395b2bd624b2c2e0a33deef1b8
 ## Network Analyzer Library
 
 `network_analyzer` is a multi-platform library that provides structures and functions to manage a sniffing process,
@@ -230,16 +227,10 @@ The struct `Sniffer` initializes the sniffing and reporting process, by
 ```rust
 pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError>
 ```
-<<<<<<< HEAD
 Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String), output file update time (u64), filter (String)) or returns an `NAError`.
 > Can raise errors:
 >
 > ⚠ **`Cap` Errors**: contains errors issued by `next_packet` method of `Cap` library
-=======
-
-Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String), output
-file update time (u64), filter (String)) or returns an `NAError`.
->>>>>>> 1d350a8c8cb807395b2bd624b2c2e0a33deef1b8
 
 ```rust
 pub fn pause(&mut self)
