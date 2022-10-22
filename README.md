@@ -8,12 +8,35 @@
 <img src="./screenshots/screenshot_2.png" alt="screenshot" width="500"/>
 
 ### CLI Arguments:
-* `--adapter (-a):` u8 number (default 1) associated to an adapter according to a list that can be shown passing `-l` or `--list-adapters` as argument
-* `--output (-o)`: String (default "report") defining the name of the output file (.md / .xml where the report is written)
+
+* `--adapter (-a):` u8 number (default 1) associated to an adapter according to a list that can be shown passing `-l`
+  or `--list-adapters` as argument
+* `--output (-o)`: String (default "report") defining the name of the output file (.md / .xml where the report is
+  written)
 * `--update-time (-u)`: u64 number (default 10000) defining the output file update time (in milliseconds)
 * `--filter (-f)`: String (default "None") defining a packet filter
+
+  > <b>Available filter strings:</b>
+  > * "IPv4"  - filters by level 3 type (only IPv4 packets)
+  > * "IPv6"  - filters by level 3 type (only IPv6 packets)
+  > * "ARP"  - filters by level 3 type (only ARP packets)
+  > * "<i>specific IP</i>" (v4 or v6) either as source or destination (<i> Example: "192.168.1.1" or "2001:db8::2:
+      1"</i>)
+  > * "<i>port</i>"  - filters only packets having as source or destination port the given one (<i> Example: "443"</i>)
+  > * "><i>length</i>"  - filters only packets whose length is greater than the given length (in bytes) (<i> Example: ">
+      50"</i>)
+  > * "<<i>length</i>"  - filters only packets whose length is less than the given length (in bytes) (<i> Example: "<
+      50"</i>)
+  > * ">=<i>length</i>"  - filters only packets whose length is greater or equal to the given length (in bytes) (<i>
+      Example: ">=50"</i>)
+  > * "<=<i>length</i>"  - filters only packets whose length is less or equal to the given length (in bytes) (<i>
+      Example: "<=50"</i>)
+  > * "=<i>length</i>"  - filters only packets whose length is equal to the given length (in bytes) (<i> Example: ">
+      =50"</i>)
 * `--tui (-t)`: bool (default "false") enabling the `tui mode`
-* `--list-adapters (-l)`: bool (default "false") showing the list of available network adapters to be sniffed, together with the associated index.
+
+* `--list-adapters (-l)`: bool (default "false") showing the list of available network adapters to be sniffed, together
+  with the associated index.
 
 ### Functions explanation
 
@@ -24,6 +47,7 @@ fn notui_show_commands()
 Prints on the terminal the list of commands.
 
 These commands can be used to control the sniffing process and are:
+
 * P to Pause
 * R to Resume
 * Q to Quit
@@ -32,7 +56,6 @@ This function uses the println! macro and waits for 3 seconds before returning.<
 In this way, the user can correctly visualize the list, independently of the following
 operations.<br>
 At the end, a "sniffing start" message is shown.
-
 
 ```rust
 fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window
@@ -44,11 +67,11 @@ with their positions and format the parameters received by putting them inside t
 Moreover, if running on MacOS or Linux, it calls the resize command of the terminal to define its dimensions.
 
 This function receives as parameters:
+
 1) adapter &[str] containing the network adapter
 2) filter &[Filter] containing the filter chosen, if any
 3) output path &[str] containing the path where the file will be saved
 4) update time [u64]
-
 
 ```rust
 fn state_win_init() -> Window
@@ -58,14 +81,16 @@ Initializes the box containing the execution state of the program, by defining i
 
 It returns a [Window] with a new box inside that as default contains "*** SNIFFING PACKETS ***".
 
-
 ```rust
 pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>)
 ```
+
 Prints a received `NAPacket`:
- * on a given `pancurses::Window` according to a proper format if the application is run in `--tui` mode
- * to the stdout (by means of the `Display` trait implemented by the struct `NAPacket`) in the other cases
-The passed parameters are:
+
+* on a given `pancurses::Window` according to a proper format if the application is run in `--tui` mode
+* to the stdout (by means of the `Display` trait implemented by the struct `NAPacket`) in the other cases
+  The passed parameters are:
+
 1) `NAPacket` to print
 2) Optional `pancurses::Window` if the application is run in `--tui` mode (None otherwise)
 3) `Arc<Mutex<()>>` to synchronize the writing operations on the tui (in case of `--tui` mode)
@@ -73,6 +98,7 @@ The passed parameters are:
 ```rust
 fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mutex<()>>)
 ```
+
 Refreshes the state window with the current `Sniffer`'s state
 Everytime a 'state change message' is sent from the Sniffer object, the tui's state window is refreshed
 
@@ -83,6 +109,7 @@ fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mut
 Prints an `NAError` in different ways depending if the TUI is enabled or not.
 
 This function receives as parameters:
+
 1) `Option<&Window>` that contains the main Window or None if the TUI is not enabled
 2) `NAError` object containing the actual error to print
 3) `bool` tui_enabled that specifies if the TUI is enabled or not
@@ -126,6 +153,7 @@ These are the `main_window` and the `state_window` which are of type `Option<Win
 ```rust
 fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui_mutex: Arc<Mutex<()>>)
 ```
+
 1) Defines the commands to be shown in the tui's command window
 2) Prints the command window and enables the arrow keys
 3) Waits in loop (through a blocking getch) for user user commands (arrow key pressure / enter)
@@ -134,16 +162,19 @@ fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_w
 ```rust
 fn notui_event_handler(sniffer: &mut Sniffer)
 ```
+
 Manages the user interaction when the TUI is not enabled.
 
 This function performs the following operations:
+
 1) Waits in loop (through a blocking read_line) for user commands (keys p,q,r pressure / enter)
-2) Calls the function associated to the selected command and prints the new execution state. 
-If the key pressed is not defined, "Undefined command" will be printed and the state won't change.
+2) Calls the function associated to the selected command and prints the new execution state.
+   If the key pressed is not defined, "Undefined command" will be printed and the state won't change.
 
 ```rust
 fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>)
 ```
+
 Prints the application logo on a given `pancurses::Window`
 
 ### main
@@ -634,189 +665,3 @@ The `Message` type.
 It is an enumeration that contains the message sent in the `SnifferChannel`,
 that can be either a `NAError`, a `NAState` or a `NAPacket`.<br>
 This type implements the `Clone` trait.
-
-## Application
-
-### Pictures of FCC Network Analyzer v1.0, in tui mode
-
-<img src="./screenshots/screenshot_1.png" alt="screenshot" width="500"/>
-<img src="./screenshots/screenshot_2.png" alt="screenshot" width="500"/>
-
-### CLI Arguments:
-
-* `--adapter (-a):` u8 number (default 1) associated to an adapter according to a list that can be shown passing `-l`
-  or `--list-adapters` as argument
-* `--output (-o)`: String (default "report") defining the name of the output file (.md / .xml where the report is
-  written)
-* `--update-time (-u)`: u64 number (default 10000) defining the output file update time (in milliseconds)
-* `--filter (-f)`: String (default "None") defining a packet filter
-
-  > <b>Available filter strings:</b>
-  > * "IPv4"  - filters by level 3 type (only IPv4 packets)
-  > * "IPv6"  - filters by level 3 type (only IPv6 packets)
-  > * "ARP"  - filters by level 3 type (only ARP packets)
-  > * "<i>specific IP</i>" (v4 or v6) either as source or destination (<i> Example: "192.168.1.1" or "2001:db8::2:
-      1"</i>)
-  > * "<i>port</i>"  - filters only packets having as source or destination port the given one (<i> Example: "443"</i>)
-  > * "><i>length</i>"  - filters only packets whose length is greater than the given length (in bytes) (<i> Example: ">
-      50"</i>)
-  > * "<<i>length</i>"  - filters only packets whose length is less than the given length (in bytes) (<i> Example: "<
-      50"</i>)
-  > * ">=<i>length</i>"  - filters only packets whose length is greater or equal to the given length (in bytes) (<i>
-      Example: ">=50"</i>)
-  > * "<=<i>length</i>"  - filters only packets whose length is less or equal to the given length (in bytes) (<i>
-      Example: "<=50"</i>)
-  > * "=<i>length</i>"  - filters only packets whose length is equal to the given length (in bytes) (<i> Example: ">
-      =50"</i>)
-* `--tui (-t)`: bool (default "false") enabling the `tui mode`
-
-* `--list-adapters (-l)`: bool (default "false") showing the list of available network adapters to be sniffed, together
-  with the associated index.
-
-### Functions explanation
-
-```rust
-fn notui_show_commands()
-```
-
-Prints on the terminal the list of commands.
-
-These commands can be used to control the sniffing process and are:
-
-* P to Pause
-* R to Resume
-* Q to Quit
-
-This function uses the println! macro and waits for 3 seconds before returning.<br>
-In this way, the user can correctly visualize the list, independently of the following
-operations.<br>
-At the end, a "sniffing start" message is shown.
-
-```rust
-fn tui_init(adapter: &str, filter: &Filter, output: &str, update_time: u64) -> Window
-```
-
-Initializes the GUI by defining the main window with its dimensions, the boxes inside it
-with their positions and format the parameters received by putting them inside the top right box.
-
-Moreover, if running on MacOS or Linux, it calls the resize command of the terminal to define its dimensions.
-
-This function receives as parameters:
-
-1) adapter &[str] containing the network adapter
-2) filter &[Filter] containing the filter chosen, if any
-3) output path &[str] containing the path where the file will be saved
-4) update time [u64]
-
-```rust
-fn state_win_init() -> Window
-```
-
-Initializes the box containing the execution state of the program, by defining its dimensions and positions.
-
-It returns a [Window] with a new box inside that as default contains "*** SNIFFING PACKETS ***".
-
-```rust
-pub fn print_packet(p: NAPacket, tui_window: Option<&Window>, tui_mutex: Arc<Mutex<()>>)
-```
-
-Prints a received `NAPacket`:
-
-* on a given `pancurses::Window` according to a proper format if the application is run in `--tui` mode
-* to the stdout (by means of the `Display` trait implemented by the struct `NAPacket`) in the other cases
-  The passed parameters are:
-
-1) `NAPacket` to print
-2) Optional `pancurses::Window` if the application is run in `--tui` mode (None otherwise)
-3) `Arc<Mutex<()>>` to synchronize the writing operations on the tui (in case of `--tui` mode)
-
-```rust
-fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mutex<()>>)
-```
-
-Refreshes the state window with the current `Sniffer`'s state
-Everytime a 'state change message' is sent from the Sniffer object, the tui's state window is refreshed
-
-```rust
-fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mutex: Arc<Mutex<()>>)
-```
-
-Prints an `NAError` in different ways depending if the TUI is enabled or not.
-
-This function receives as parameters:
-
-1) `Option<&Window>` that contains the main Window or None if the TUI is not enabled
-2) `NAError` object containing the actual error to print
-3) `bool` tui_enabled that specifies if the TUI is enabled or not
-4) `Arc<Mutex<()>>` to manage the use of `printw` function.
-   If the TUI is enabled, the function will:
-5) Lock the mutex
-6) Print the error inside the state box of the main window
-7) Release the lock
-
-Otherwise, if TUI is not enabled, it prints the error using the `println!` macro.
-
-```rust
-fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, tui_mutex: Arc<Mutex<()>>)
-```
-
-Calls `tui_event_handler(...)` or `notui_event_handler(...)` depending on the tui boolean
-argument received.
-
-This function starts the main loop that listen to the tui or to the terminal stdin.<br>
-It accept as parameters a `sniffer` reference and a `tui` boolean.<br>
-The other parameters are "optional" and are used only in case of a tui based call.<br>
-These are the `main_window` and the `state_window` which are of type `Option<Window>` and a
-`tui_mutex`, used to synchronize the tui updates.
-
-```rust
-fn tui_event_handler(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui_mutex: Arc<Mutex<()>>)
-```
-
-1) Defines the commands to be shown in the tui's command window
-2) Prints the command window and enables the arrow keys
-3) Waits in loop (through a blocking getch) for user user commands (arrow key pressure / enter)
-4) Calls the function associated to the selected command
-
-```rust
-fn notui_event_handler(sniffer: &mut Sniffer)
-```
-
-Manages the user interaction when the TUI is not enabled.
-
-This function performs the following operations:
-
-1) Waits in loop (through a blocking read_line) for user commands (keys p,q,r pressure / enter)
-2) Calls the function associated to the selected command and prints the new execution state.
-   If the key pressed is not defined, "Undefined command" will be printed and the state won't change.
-
-```rust
-fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>)
-```
-
-Prints the application logo on a given `pancurses::Window`
-
-### main
-
-The first action performed by the main is the parsing of the main arguments (via `Parser` derived by `clap` library).
-
-In `--list-adapters (-l)` mode, only the list of available network adapters (together with the associated index) is
-shown.
-
-Otherwise, the main:
-
-1) checks if the `--tui (-t)` mode has been activated
-2) creates a `network_adapter::sniffer::Sniffer` object, properly configured by passing the main arguments as parameters
-   to the constructor
-3) if the `tui mode` is enabled, properly initializes the tui layout and content on the terminal
-4) subscribes to the `SnifferChannel` associated to the `Sniffer` object, in order to listen for packets, state change
-   messages or errors (`network_analyzer::sniffer::Message`).
-
-The last point is implemented through a secondary thread, the `observer_thread`, that listens
-to the `Receiver` object generated by the subscription and loops on it, waiting for a new message.<br>
-When the `recv()` blocking method of the receiver returns, the thread calls `print_packet(...)`,
-`print_error(...)` or `print_closing(...)` if the state received is `NAState::STOPPED`.<br>
-These methods will print the message on the stdout or on the tui (if enabled).
-
-Then, a new loop is initialized in the main thread, that listens for inputs and, in the end,
-it waits for the termination of all the secondary threads, before closing.
