@@ -18,7 +18,11 @@ pub mod sniffer {
     ///
     ///This function takes an u8 representing the index associated to a device within
     ///the network device list and returns a Result, containing either a proper pcap
-    /// `Device` object, or a `NAError`
+    /// `Device` object, or a `NAError`.
+    ///
+    ///  Can raise errors:
+    /// - ⚠ **Device not found**: when the adapter defined does not match with any device number.
+
     pub fn get_adapter(adapter: u8) -> Result<Device, NAError> {
         let device_list = Device::list().unwrap();
         let mut couple = Vec::<(u8, Device)>::new();
@@ -58,6 +62,9 @@ pub mod sniffer {
 
         ///Creates a new `Sniffer` object given four parameters (network adapter to sniff (u8), output filename (String),
         /// output file update time (u64), filter (String)) or returns an `NAError`.
+        ///
+        /// Can raise errors:
+        /// - ⚠ **`Cap` Errors**: contains errors issued by `next_packet` method of `Cap` library
 
         pub fn new(adapter: u8, output: String, update_time: u64, filter: String) -> Result<Self, NAError> {
             let report_file_name = get_file_name(output.clone());
@@ -890,6 +897,18 @@ pub mod sniffer {
         /// that calls it.
         ///
         /// It implements Display and Error traits.
+        /// The list of possible errors raised is:
+        ///
+        /// - in network_analyzer::sniffer:get_adapter()
+        ///   - ⚠ **Device not found**
+        /// - in network_analyzer::sniffer:new()
+        ///   - ⚠ **`Cap` Errors**
+        /// - in network_analyzer::sniffer::filter:get_filter()
+        ///    - ⚠ **Not a valid IPv4 addr. as filter**
+        ///    - ⚠ **Not an IP addr. as filter**
+        ///    - ⚠ **Not a valid IPv6 addr. as filter**
+        ///    - ⚠ **Not a valid packet length**
+        ///    - ⚠ **Unavailable filter**
         pub struct NAError {
             message: String,
         }
@@ -968,7 +987,15 @@ pub mod sniffer {
         ///* "192.168.1.1" can be associated to  `Filter::IP(String)`
         ///* "2001:db8::2:1" can be associated to a `Filter::IP(String)`
         ///* "foo.192 foo" cannot be associated to any filter
-        /// * ">=1514" can be associated to a `Filter::GE(u16)`
+        /// * ">=1514" can be associated to a `Filter::GE(u16)`.
+        ///
+        ///  Can raise errors:
+        /// - ⚠ **Not a valid IPv4 addr. as filter**: filter parameter contains values that cannot be parsed as u8
+        /// - ⚠ **Not an IP addr. as filter**: filter parameter doesn't contain a well formatted IP address (no separation dots or wrong length)
+        /// - ⚠ **Not a valid IPv6 addr. as filter**: filter parameter contains values that cannot be parsed as u16 or doesn't represent a well formatted address (no separation points or wrong length)
+        /// - ⚠ **Not a valid packet length**: filter parameter contains values that cannot be parsed as u32
+        /// - ⚠ **Unavailable filter**: filter parameter doesn't contain a valid value (accepted values are: "none","ipv4","ipv6","arp",ipv4 address, ipv6 address, `[<=,>=,<,>,=]`[u32])
+
         pub fn get_filter(filter: &String) -> Result<Filter, NAError> {
             //Actually available filters
             let f = filter.as_str();
