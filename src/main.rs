@@ -204,6 +204,7 @@ fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mu
         None => println!("{}", msg),
     }
 }
+
 /// Prints an [NAError] in different ways depending if the TUI is enabled or not.
 ///
 /// This function receives as parameters:
@@ -236,8 +237,8 @@ fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mut
         sub4.as_ref().unwrap().printw("Press any key to quit");
         sub4.as_ref().unwrap().refresh();
     } else {
-        println ! ("ERROR: {}", error);
-        println !("Press any key + \"Enter\" to quit")
+        println!("ERROR: {}", error);
+        println!("Press any key + \"Enter\" to quit")
     }
 }
 
@@ -371,11 +372,11 @@ fn notui_event_handler(sniffer: &mut Sniffer) {
             'p' => {
                 sniffer.pause();
                 println!("{}", PAUSE);
-            },
+            }
             'r' => {
                 sniffer.resume();
                 println!("{}", RUN);
-            },
+            }
             'q' => {
                 sniffer.stop();
                 println!("{}", QUIT);
