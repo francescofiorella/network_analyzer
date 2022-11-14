@@ -44,14 +44,15 @@ fn file_name_ending_with_dot_xml() {
 }
 
 #[test]
-fn not_existing_adapter() {
+#[should_panic(expected = "Device not found")]
+fn test_not_existing_adapter() {
     let device_list = Device::list().unwrap();
     let mut couple = Vec::<(u8, Device)>::new();
     for (index, device) in device_list.into_iter().enumerate() {
         couple.push((index as u8 + 1, device));
     }
     let last_dev_index = couple.pop().unwrap().0;
-    assert!(get_adapter(100).is_err());
+    get_adapter(last_dev_index+1).unwrap();
 }
 
 #[test]
@@ -110,21 +111,24 @@ fn test_correct_ipv4_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not an IP addr. as filter")]
 fn test_short_ipv4_filter(){
     let filter_name = "192.168.1".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid IPv4 addr. as filter")]
 fn test_not_parsable1_ipv4_filter(){
     let filter_name = "192.foo.1.2".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid IPv4 addr. as filter")]
 fn test_not_parsable2_ipv4_filter(){
     let filter_name = "192.256.1.2".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
@@ -139,15 +143,17 @@ fn test_correct_ipv6_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid IPv6 addr. as filter")]
 fn test_long_ipv6_filter(){
     let filter_name = "2001:db8::2:1::ab::fe:".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid IPv6 addr. as filter")]
 fn test_not_parsable1_ipv6_filter(){
     let filter_name = "2001:foo::".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
@@ -162,9 +168,10 @@ fn test_biggest_ipv6_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid IPv6 addr. as filter")]
 fn test_not_parsable2_ipv6_filter(){
     let filter_name = "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff1".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 //TO DO - serie di :: maggiore di 2 in ipv6 filtering
@@ -203,15 +210,17 @@ fn test_0_port_number(){
 }
 
 #[test]
+#[should_panic(expected = "Unavailable filter")]
 fn test_not_u16_parsable_port_number(){
     let filter_name = "65536".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Unavailable filter")]
 fn test_negative_port_number(){
     let filter_name = "-1".to_string();
-    assert!(get_filter(&filter_name).is_err())
+    get_filter(&filter_name).unwrap();
 }
 
 //NOTA: si fa il parsing a 32 bit, per cui anche oltre 65535 va bene
@@ -239,21 +248,24 @@ fn test_0_lt_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_wrong_lt_spaced_filter(){
     let filter_name = "< 65535".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_negative_lt_filter(){
     let filter_name = "<-1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_unparsable_lt_filter(){
-    let filter_name = "<192.168.1.1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    let filter_name = "<foo".to_string();
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
@@ -279,21 +291,24 @@ fn test_0_le_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_wrong_le_spaced_filter(){
     let filter_name = "<= 65535".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_negative_le_filter(){
     let filter_name = "<=-1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_unparsable_le_filter(){
-    let filter_name = "<=192.168.1.1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    let filter_name = "<=foo".to_string();
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
@@ -319,21 +334,24 @@ fn test_0_eq_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_wrong_eq_spaced_filter(){
     let filter_name = "= 65535".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_negative_eq_filter(){
     let filter_name = "=-1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_unparsable_eq_filter(){
-    let filter_name = "=192.168.1.1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    let filter_name = "=foo".to_string();
+    get_filter(&filter_name).unwrap();
 }
 
 
@@ -361,21 +379,24 @@ fn test_0_ge_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_wrong_ge_spaced_filter(){
     let filter_name = ">= 65535".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_negative_ge_filter(){
     let filter_name = ">=-1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_unparsable_ge_filter(){
-    let filter_name = ">=192.168.1.1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    let filter_name = ">=foo".to_string();
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
@@ -401,21 +422,24 @@ fn test_0_gt_filter(){
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_wrong_gt_spaced_filter(){
     let filter_name = "> 65535".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_negative_gt_filter(){
     let filter_name = ">-1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
+#[should_panic(expected = "Not a valid packet length")]
 fn test_unparsable_gt_filter(){
-    let filter_name = ">192.168.1.1".to_string();
-    assert!(get_filter(&filter_name).is_err());
+    let filter_name = ">foo".to_string();
+    get_filter(&filter_name).unwrap();
 }
 
 #[test]
