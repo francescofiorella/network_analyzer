@@ -1328,14 +1328,14 @@ pub mod sniffer {
             (string_md, string_xml)
         }
 
-        pub(crate) fn option_to_string<T: Display>(opt: Option<T>) -> String {
+        pub fn option_to_string<T: Display>(opt: Option<T>) -> String {
             match opt {
                 Some(num) => num.to_string(),
                 None => String::from("None")
             }
         }
 
-        pub(crate) fn to_u16(p: &[u8], start: usize) -> u16 {
+        pub fn to_u16(p: &[u8], start: usize) -> u16 {
             let param1: u16 = p[start] as u16 * 256;
             let param2 = p[start + 1] as u16;
             param1 + param2
@@ -1352,14 +1352,14 @@ pub mod sniffer {
         ///
         /// It is used to let the sniffer communicate with its subscribers by sending messages.<br>
         /// It contains a vector of `Sender<Message>`, one for each subscriber.
-        pub(crate) struct SnifferChannel {
+        pub struct SnifferChannel {
             senders: Vec<Sender<Message>>,
         }
 
         impl SnifferChannel {
             /// Creates a new `SnifferChannel` object and populate it with an empty array
             /// of senders.
-            pub(crate) fn new() -> Self {
+            pub fn new() -> Self {
                 SnifferChannel { senders: Vec::new() }
             }
 
@@ -1368,7 +1368,7 @@ pub mod sniffer {
             /// This method use the `std::sync::mpsc::channel()` function to create
             /// a `Sender`, which will be added to the `SnifferChannel` and a `Receiver`,
             /// which will be returned to the subscriber.
-            pub(crate) fn subscribe(&mut self) -> Receiver<Message> {
+            pub fn subscribe(&mut self) -> Receiver<Message> {
                 let (sx, rx) = channel::<Message>();
                 self.senders.push(sx);
                 rx
@@ -1380,7 +1380,7 @@ pub mod sniffer {
             /// It calls the `send(message)` method of the `Sender` that attempts to send the
             /// message and returns an error if the `Receiver` has been already deallocated.<br>
             /// In this case, the sender is removed from the vector.
-            pub(crate) fn send(&mut self, message: Message) {
+            pub fn send(&mut self, message: Message) {
                 let mut i = 0;
                 loop {
                     if i < self.senders.len() {
