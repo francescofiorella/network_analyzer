@@ -1,14 +1,11 @@
 use std::result;
 use pcap::{Device, Packet, PacketHeader};
 use network_analyzer::sniffer::filter::{Filter, get_filter};
-use network_analyzer::sniffer::format::get_file_name;
 use network_analyzer::sniffer::get_adapter;
 use network_analyzer::sniffer::na_error::NAError;
 use network_analyzer::sniffer::na_packet::NAPacket;
 use network_analyzer::sniffer::channel::{Message, SnifferChannel};
 use network_analyzer::sniffer::format::{get_file_name, option_to_string, to_u16};
-use network_analyzer::sniffer::na_error::NAError;
-use network_analyzer::sniffer::na_packet::NAPacket;
 use network_analyzer::sniffer::na_state::NAState;
 
 #[test]
@@ -36,6 +33,13 @@ fn file_name_ending_with_dot_md() {
 fn file_name_ending_with_xml() {
     let file_name = "file_namexml".to_string();
     let result = ("file_namexml.md".to_string(), "file_namexml.xml".to_string());
+    assert_eq!(get_file_name(file_name), result);
+}
+
+#[test]
+fn file_name_ending_with_dot_xml() {
+    let file_name = "file_name.xml".to_string();
+    let result = ("file_name.xml.md".to_string(), "file_name.xml".to_string());
     assert_eq!(get_file_name(file_name), result);
 }
 
