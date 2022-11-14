@@ -1303,10 +1303,10 @@ pub mod sniffer {
         }
     }
 
-    mod format {
+    pub mod format {
         use std::fmt::Display;
 
-        pub(crate) fn get_file_name(string: String) -> (String, String) {
+        pub fn get_file_name(string: String) -> (String, String) {
             let mut string_md = string.trim().to_string();
             let mut string_xml = string.trim().to_string();
 
