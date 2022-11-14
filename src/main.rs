@@ -426,6 +426,8 @@ fn print_closing(window: &Window, tui_mutex: Arc<Mutex<()>>) {
 
     window.attroff(COLOR_PAIR(5));
     window.refresh();
+
+    sleep(Duration::from_secs(3)); //to show the logo
 }
 
 /// The first action performed by the main is the parsing of the main arguments (via `Parser`
@@ -507,7 +509,6 @@ fn main() {
                         if state.is_stopped() {
                             if tui_enabled {
                                 print_closing(sub4.as_ref().unwrap(), tui_mutex_cl.clone());
-                                sleep(Duration::from_secs(3)); //to show the logo
                             }
                             break;
                         }
