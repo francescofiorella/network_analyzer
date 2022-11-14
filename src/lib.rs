@@ -892,7 +892,6 @@ pub mod sniffer {
         use std::error::Error;
         use std::fmt::{Display, Formatter};
 
-        #[derive(Debug, Clone)]
         /// The struct `NAError` defines custom error messages.
         ///
         /// It contains a message of type [String] that includes a brief description of the error occurred, depending on the function
@@ -911,6 +910,7 @@ pub mod sniffer {
         ///    - ⚠ **Not a valid IPv6 addr. as filter**
         ///    - ⚠ **Not a valid packet length**
         ///    - ⚠ **Unavailable filter**
+        #[derive(Debug, Clone)]
         pub struct NAError {
             message: String,
         }
@@ -940,7 +940,7 @@ pub mod sniffer {
         /// <i> Example </i>
         /// * `Filter::IP(192.168.1.1)` is converted into "IP 192.168.1.1"
         /// * `Filter::Port(443)` is converted into "port 443"
-        #[derive(Clone)]
+        #[derive(Clone, PartialEq)]
         pub enum Filter {
             None,
             IPv4,
