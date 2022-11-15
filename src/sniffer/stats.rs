@@ -17,7 +17,7 @@ use std::io::Write;
 /// * The timestamp of the first packet received
 /// * The timestamp of the last packet received
 #[derive(Debug, Clone)]
-pub struct Stats {
+pub(crate) struct Stats {
     sockets: [(Option<String>, Option<u16>); 2],
     l3_protocol: String,
     transported_protocol: Option<String>,
@@ -34,7 +34,7 @@ impl Stats {
     /// and last packet fields.
     ///
     /// It is typically used by passing as argument the first packet of a flow.
-    pub fn new(packet: NAPacket) -> Self {
+    pub(crate) fn new(packet: NAPacket) -> Self {
         Stats {
             sockets: [(packet.source_address, packet.source_port), (packet.destination_address, packet.destination_port)],
             l3_protocol: packet.level_three_type,
@@ -57,7 +57,7 @@ impl Stats {
 ///
 /// It panics if it is unable to write correctly the files and show the message
 /// `"Unable to write the report file!"`.
-pub fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
+pub(crate) fn produce_report(file_name_md: String, file_name_xml: String, packets: Vec<NAPacket>, stats: Vec<Stats>) -> Vec<Stats> {
     // define the path
     let vec = produce_stats(stats, packets);
 
