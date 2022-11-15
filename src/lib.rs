@@ -121,6 +121,7 @@ pub mod sniffer {
                         // rilascia il lock prima di next_packet() (bloccante)
                         drop(mg);
                         match cap.next_packet() {
+
                             Ok(packet) => {
                                 mg = m_cl.lock().unwrap();
                                 if mg.0.is_paused() {
@@ -134,6 +135,7 @@ pub mod sniffer {
                                         .unwrap();
                                     drop(mg);
                                     continue;
+
                                 } else if mg.0.is_stopped() {
                                     break;
                                 }
@@ -145,6 +147,7 @@ pub mod sniffer {
                                     mg.1.push(p);
                                 }
                             }
+
                             Err(e) => {
                                 if e == TimeoutExpired {
                                     cap = Capture::from_device(device.clone())
@@ -162,6 +165,7 @@ pub mod sniffer {
                                 break;
                             }
                         }
+
                     } else if mg.0.is_paused() {
                         drop(cap);
                         mg = cv_cl.wait_while(mg, |mg| mg.0.is_paused()).unwrap();
@@ -171,9 +175,11 @@ pub mod sniffer {
                             .promisc(true)
                             .open()
                             .unwrap();
+
                     } else {
                         break;
                     }
+
                     drop(mg);
                 }
 
@@ -269,7 +275,7 @@ pub mod sniffer {
         /// The struct `NAPacket` describes the packet sniffed and keeps the most relevant network information like:
         /// * source and destination MAC addresses
         /// * level 3 protocol type
-        /// * source and destination level 3 adresses (IPv4 or IPv6)
+        /// * source and destination level 3 addresses (IPv4 or IPv6)
         /// * packet length (in bytes)
         /// * transported protocol
         /// * source and destination ports (if any)
@@ -306,18 +312,19 @@ pub mod sniffer {
             /// such as transported protocols, source and destination ports, addresses etc ... which are casted using appropriate functions.
 
             pub fn new(pcap_packet: Packet) -> Self {
+
                 let mut source_address = None;
                 let mut destination_address = None;
                 let mut transported_protocol = None;
                 let mut source_port = None;
                 let mut destination_port = None;
+
                 let eth_type = to_u16(&pcap_packet, 12);
                 match eth_type {
                     // IPv4
                     0x0800 => {
                         source_address = Some(to_ip_address(&pcap_packet, 26));
                         destination_address = Some(to_ip_address(&pcap_packet, 30));
-
                         let prot_num = pcap_packet[23];
                         transported_protocol = Some(to_transported_protocol(prot_num));
                         if prot_num == 6 || prot_num == 17 { // TCP o UDP
@@ -369,6 +376,7 @@ pub mod sniffer {
 
 
                     }
+
                     // IPv6
                     0x86DD => {
                         source_address = Some(to_ipv6_address(&pcap_packet, 22));
@@ -429,7 +437,6 @@ pub mod sniffer {
                         }
                     }
 
-
                     // ARP | RARP
                     0x0806 | 0x8035 => {
                         // Sender IP
@@ -456,7 +463,6 @@ pub mod sniffer {
             /// Formats the `NAPacket` source and destination MAC addresses.
             ///
             /// This function returns a [String] containing source and destination MAC addresses properly formatted to appear on the terminal.
-
             pub fn to_string_mac(&self) -> String {
                 let mut s = String::new();
                 s.push_str(&*("MAC_s: ".to_owned() + &self.source_mac_address + "  "
@@ -886,6 +892,198 @@ pub mod sniffer {
                 }
             }
         }
+
+        #[cfg(test)]
+        mod tests {
+            use super::*;
+
+            fn get_packet_by_type(l3type: &str) -> Option<NAPacket> {
+                match l3type {
+                    "IPv4" => Some(NAPacket {
+                        destination_mac_address: "DE:25:50:20:C3:C1".to_string(),
+                        source_mac_address: "01:00:5E:00:00:FB".to_string(),
+                        level_three_type: "IPv4".to_string(),
+                        total_length: 191,
+                        source_address: Some("192.168.1.249".to_string()),
+                        destination_address: Some("224.0.0.251".to_string()),
+                        transported_protocol: Some("UDP (MDNS)".to_string()),
+                        source_port: Some(5353),
+                        destination_port: Some(5353),
+                        timestamp: 1168461365594
+                    }),
+
+                    "IPv6" => Some(NAPacket {
+                        destination_mac_address: "DE:25:50:20:C3:C1".to_string(),
+                        source_mac_address: "01:00:5E:00:00:FB".to_string(),
+                        level_three_type: "IPv6".to_string(),
+                        total_length: 86,
+                        source_address: Some("fe80::1213:31ff:fed6:8cca".to_string()),
+                        destination_address: Some("ff02::1:fffb:12b5".to_string()),
+                        transported_protocol: Some("UDP (MDNS)".to_string()),
+                        source_port: Some(5353),
+                        destination_port: Some(5353),
+                        timestamp: 1168461365594
+                    }),
+
+                    "ARP" => Some(NAPacket {
+                        destination_mac_address: "DE:25:50:20:C3:C1".to_string(),
+                        source_mac_address: "FF:FF:FF:FF:FF:FF".to_string(),
+                        level_three_type: "ARP".to_string(),
+                        total_length: 60,
+                        source_address: Some("192.168.1.249".to_string()),
+                        destination_address: Some("192.168.1.248".to_string()),
+                        transported_protocol: None,
+                        source_port: None,
+                        destination_port: None,
+                        timestamp: 1168461365594
+                    }),
+
+                    _ => None
+                }
+            }
+
+            #[test]
+            fn test_filter_ipv4_1() {
+                assert!(get_packet_by_type("IPv4").unwrap().filter(Filter::IPv4))
+            }
+
+            #[test]
+            fn test_filter_ipv6_1() {
+                assert!(!get_packet_by_type("IPv4").unwrap().filter(Filter::IPv6))
+            }
+
+            #[test]
+            fn test_filter_arp_1() {
+                assert!(!get_packet_by_type("IPv4").unwrap().filter(Filter::ARP))
+            }
+
+            #[test]
+            fn test_filter_port_1_1() {
+                assert!(get_packet_by_type("IPv4").unwrap().filter(Filter::Port(5353)))
+            }
+
+            #[test]
+            fn test_filter_ip_1_1() {
+                assert!(!get_packet_by_type("IPv4").unwrap().filter(Filter::IP("192.168.1.5".to_string())))
+            }
+
+            #[test]
+            fn test_filter_ip_1_2() {
+                assert!(get_packet_by_type("IPv4").unwrap().filter(Filter::IP("192.168.1.249".to_string())))
+            }
+
+            #[test]
+            fn test_filter_port_1_2() {
+                assert!(!get_packet_by_type("IPv4").unwrap().filter(Filter::Port(8080)))
+            }
+
+            #[test]
+            fn test_filter_ipv4_2() {
+                assert!(!get_packet_by_type("IPv6").unwrap().filter(Filter::IPv4))
+            }
+
+            #[test]
+            fn test_filter_ipv6_2() {
+                assert!(get_packet_by_type("IPv6").unwrap().filter(Filter::IPv6))
+            }
+
+            #[test]
+            fn test_filter_arp_2() {
+                assert!(!get_packet_by_type("IPv6").unwrap().filter(Filter::ARP))
+            }
+
+            #[test]
+            fn test_filter_ip_2_1() {
+                assert!(get_packet_by_type("IPv6").unwrap().filter(Filter::IP("fe80::1213:31ff:fed6:8cca".to_string())))
+            }
+
+            #[test]
+            fn test_filter_ip_2_2() {
+                assert!(!get_packet_by_type("IPv6").unwrap().filter(Filter::IP("fe80::1213:31ff:fed6:ffff".to_string())))
+            }
+
+            #[test]
+            fn test_filter_arp_3() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::ARP))
+            }
+
+            #[test]
+            fn test_filter_ge_1() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::GE(61)))
+            }
+
+            #[test]
+            fn test_filter_ge_2() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::GE(59)))
+            }
+
+            #[test]
+            fn test_filter_ge_3() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::GE(60)))
+            }
+
+            #[test]
+            fn test_filter_gt_1() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::GT(59)))
+            }
+
+            #[test]
+            fn test_filter_gt_2() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::GT(60)))
+            }
+
+            #[test]
+            fn test_filter_gt_3() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::GT(61)))
+            }
+
+            #[test]
+            fn test_filter_eq_1() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::EQ(59)))
+            }
+
+            #[test]
+            fn test_filter_eq_2() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::EQ(60)))
+            }
+
+            #[test]
+            fn test_filter_eq_3() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::EQ(61)))
+            }
+
+            #[test]
+            fn test_filter_le_1() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::LE(59)))
+            }
+
+            #[test]
+            fn test_filter_le_2() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::LE(60)))
+            }
+
+            #[test]
+            fn test_filter_le_3() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::LE(61)))
+            }
+
+            #[test]
+            fn test_filter_lt_1() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::LT(59)))
+            }
+
+            #[test]
+            fn test_filter_lt_2() {
+                assert!(!get_packet_by_type("ARP").unwrap().filter(Filter::LT(60)))
+            }
+
+            #[test]
+            fn test_filter_lt_3() {
+                assert!(get_packet_by_type("ARP").unwrap().filter(Filter::LT(61)))
+            }
+
+
+        }
     }
 
     pub mod na_error {
@@ -940,7 +1138,7 @@ pub mod sniffer {
         /// <i> Example </i>
         /// * `Filter::IP(192.168.1.1)` is converted into "IP 192.168.1.1"
         /// * `Filter::Port(443)` is converted into "port 443"
-        #[derive(Clone, PartialEq)]
+        #[derive(Clone)]
         pub enum Filter {
             None,
             IPv4,
