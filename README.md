@@ -327,7 +327,7 @@ Creates a new `NAError` object starting from a &str msg received as parameter.
 ### network_analyzer::sniffer::Filter
 
 Enumerates the different filtering categories offered by the network_analyzer library.
-The filter to be used is defined as CLI argument, by passing an appropriate filter string preceeded by flag -f (--filter
+The filter to be used is defined as CLI argument, by passing an appropriate filter string preceded by flag -f (--filter
 as long notation) [see Application > CLI Arguments section]
 
 It also implements the `ToString` trait, allowing a correct transformation of `Filter`'s
