@@ -393,7 +393,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "cursive",
- "libc",
  "mac_address",
  "pcap",
 ]

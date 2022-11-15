@@ -9,7 +9,6 @@ edition = "2021"
 pcap = "0.10.1"
 clap = { version = "3.2.21", features = ["derive"] }
 mac_address = "1.1.3"
-libc = "0.2.137"
 
 [dependencies.cursive]
 version = "0.20.0"
