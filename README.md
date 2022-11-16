@@ -589,22 +589,6 @@ This function receives as parameters:
 
 Otherwise, if TUI is not enabled, it prints the error using the `println!` macro.
 
-> Possible `NAError` it can raise are:
->
-> ⚠ **Not a valid IPv4 addr. as filter**
->
-> ⚠ **Not an IP addr. as filter**
->
-> ⚠ **Not a valid IPv6 addr. as filter**
->
-> ⚠ **Not a valid packet length**
->
-> ⚠ **Unavailable filter**
->
-> ⚠ **`Cap` Errors**
->
-> ⚠ **Device not found**
-
 ```rust
 fn enable_commands(sniffer: &mut Sniffer, main_window: Option<Window>, state_window: Option<Window>, tui: bool, tui_mutex: Arc<Mutex<()>>)
 ```

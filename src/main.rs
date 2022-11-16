@@ -219,15 +219,6 @@ fn print_state(state_window: Option<&Window>, state: &NAState, tui_mutex: Arc<Mu
 /// 3) Release the lock
 ///
 /// Otherwise, if TUI is not enabled, it prints the error using the `println!` macro.
-///
-/// Possible `NAError` it can raise are:
-/// - ⚠ **Not a valid IPv4 addr. as filter**
-/// - ⚠ **Not an IP addr. as filter**
-/// - ⚠ **Not a valid IPv6 addr. as filter**
-/// - ⚠ **Not a valid packet length**
-/// - ⚠ **Unavailable filter**
-/// - ⚠ **`Cap` Errors**
-/// - ⚠ **Device not found**
 fn print_error(sub4: Option<&Window>, error: NAError, tui_enabled: bool, tui_mutex: Arc<Mutex<()>>) {
     if tui_enabled {
         let _mg = tui_mutex.lock().unwrap(); //drop at the end of the block
@@ -514,6 +505,7 @@ fn main() {
                         }
                     }
                     Ok(Message::Packet(packet)) => print_packet(packet, sub4.as_ref(), tui_mutex_cl.clone()),
+
                     Err(_) => break
                 }
             }
